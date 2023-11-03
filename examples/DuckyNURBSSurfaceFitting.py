@@ -11,7 +11,7 @@ from matplotlib import cm
 from geomdl import exchange
 from geomdl.visualization import VisMPL
 from geomdl import compatibility
-import offset_eval as off
+# import offset_eval as off
 
 SMALL_SIZE = 12
 MEDIUM_SIZE = 16
@@ -27,6 +27,25 @@ plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
 plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
 plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
+def plot_points3d(P, colors=[]):
+    # given a point cloud P plot the points connected with a wireframe
+    # create a figure
+    fig = plt.figure()
+    # add a subplot
+    ax = fig.add_subplot(111, projection='3d')
+    # plot the points
+    #if empty colors then plot the points in red
+    if len(colors) == 0:
+        ax.scatter(P[:, 0], P[:, 1], P[:, 2], c='r', marker='o')
+    else:
+        ax.scatter(P[:, 0], P[:, 1], P[:, 2], c=colors, marker='o')
+    # set the limits based on points P
+    ax.set_xlim3d(np.min(P[:, 0]), np.max(P[:, 0]))
+    ax.set_ylim3d(np.min(P[:, 1]), np.max(P[:, 1]))
+    ax.set_zlim3d(np.min(P[:, 2]), np.max(P[:, 2]))
+
+    # show the plot
+    plt.show()
 
 def read_weights(filename, sep=","):
     try:
@@ -89,7 +108,7 @@ def main():
     layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=3, q=3, out_dim_u=num_eval_pts_u, out_dim_v=num_eval_pts_v, method='tc', dvc='cuda').cuda()
     opt1 = torch.optim.LBFGS(iter([inp_ctrl_pts, weights]), lr=0.5, max_iter=3)
     opt2 = torch.optim.SGD(iter([knot_int_u, knot_int_v]), lr=1e-3)
-    pbar = tqdm(range(80000))
+    pbar = tqdm(range(1000))
 
     for i in pbar:
         # torch.cuda.empty_cache()
@@ -137,6 +156,16 @@ def main():
 
         out = layer((torch.cat((inp_ctrl_pts,weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
         target = target.reshape(1,num_eval_pts_u,num_eval_pts_v,3)
+        #convert to numpy
+        outnp = out.detach().cpu().numpy().squeeze()
+        targetnp = target.detach().cpu().numpy().squeeze()
+        #convert to point cloud
+        #reshape to points
+        outnp = outnp.reshape(num_eval_pts_u*num_eval_pts_v,3)
+        targetnp = targetnp.reshape(num_eval_pts_u*num_eval_pts_v,3)
+
+        plot_points3d(outnp, 'green')
+        plot_points3d(targetnp, 'blue')
         out = out.reshape(1,num_eval_pts_u,num_eval_pts_v,3)
 
         if (i+1)%80001 == 0:

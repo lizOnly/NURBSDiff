@@ -10,7 +10,7 @@ from matplotlib import cm
 from geomdl import exchange
 from geomdl.visualization import VisMPL
 from geomdl import compatibility
-import offset_eval as off
+# import offset_eval as off
 
 SMALL_SIZE = 12
 MEDIUM_SIZE = 16

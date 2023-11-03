@@ -4,12 +4,12 @@ torch.manual_seed(0)
 from torch import nn
 from torch.autograd import Function
 from torch.autograd import Variable
-
+from collections import Counter
 from .utils import gen_knot_vector
 
 from NURBSDiff.surf_eval_cpp import pre_compute_basis as cpp_pre_compute_basis, forward as cpp_forward, backward as cpp_backward
-from NURBSDiff.surf_eval_cuda import pre_compute_basis, forward, backward
-
+# from NURBSDiff.surf_eval_cuda import pre_compute_basis, forward, backward
+#from NURBSDiff.surf_eval_cuda import pre_compute_basis
 class SurfEval(torch.nn.Module):
     """
     We can implement our own custom autograd Functions by subclassing
@@ -27,11 +27,36 @@ class SurfEval(torch.nn.Module):
         self.v = torch.linspace(1e-5, 1.0-1e-5, steps=out_dim_v, dtype=torch.float32)
         self.method = method
         self.dvc = dvc
+        self.vspan_uv = self.v
+        self.uspan_uv = self.u
         if self.dvc == 'cuda':
             self.u = self.u.cuda()
             self.v = self.v.cuda()
 
-
+    def getuvspan(self):
+        return self.uspan_uv, self.vspan_uv
+    def getrealUV(self):
+        return self.U, self.V
+    def getuindices(self):
+        uindices = None
+        for l in range(self.p+1):
+            if uindices is None:
+                uindices = self.uspan_uv-self.p+l
+            else:
+                uindices = torch.cat((uindices, self.uspan_uv-self.p+l), dim=0)
+        # uvindices = torch.stack([self.uspan_uv-self.p+l for l in range(self.p+1)])
+        # print(uvindices)
+        return uindices
+    def getvindices(self):
+        vindices = None
+        for l in range(self.q+1):
+            if vindices is None:
+                vindices = self.vspan_uv-self.q+l
+            else:
+                vindices = torch.cat((vindices, self.vspan_uv-self.q+l), dim=0)
+        # uvindices = torch.stack([self.uspan_uv-self.p+l for l in range(self.p+1)])
+        # print(uvindices)
+        return vindices
     def forward(self,input):
         """
         In the forward pass we receive a Tensor containing the input and return
@@ -41,13 +66,13 @@ class SurfEval(torch.nn.Module):
         """
         # input will be of dimension (batch_size, m+1, n+1, dimension)
         ctrl_pts, knot_u, knot_v = input
-
         U_c = torch.cumsum(torch.where(knot_u<0.0, knot_u*0+1e-4, knot_u), dim=1)
         U = (U_c - U_c[:,0].unsqueeze(-1)) / (U_c[:,-1].unsqueeze(-1) - U_c[:,0].unsqueeze(-1))
         V_c = torch.cumsum(torch.where(knot_v<0.0, knot_v*0+1e-4, knot_v), dim=1)
-
+        # print(knot_u)
+        # print(U_c)
+        # print(U)
         V = (V_c - V_c[:,0].unsqueeze(-1)) / (V_c[:,-1].unsqueeze(-1) - V_c[:,0].unsqueeze(-1))
-
         if torch.isnan(V).any():
             print(V_c)
             print(knot_v)
@@ -55,7 +80,8 @@ class SurfEval(torch.nn.Module):
         if torch.isnan(U).any():
             print(U_c)
             print(knot_u)
-
+        self.U = U
+        self.V = V
         #############################################################################
         #################### Gaussian gradient smoothening ##########################
 
@@ -78,6 +104,7 @@ class SurfEval(torch.nn.Module):
         #############################################################################
         #################### Autograd based definition ##############################
         u = self.u.unsqueeze(0)
+        # print(u)
         uspan_uv = torch.stack([torch.min(torch.where((u - U[s,self.p:-self.p].unsqueeze(1))>1e-8, u - U[s,self.p:-self.p].unsqueeze(1), (u - U[s,self.p:-self.p].unsqueeze(1))*0.0 + 1),0,keepdim=False)[1]+self.p for s in range(U.size(0))])
 
         u = u.squeeze(0)
@@ -98,8 +125,15 @@ class SurfEval(torch.nn.Module):
 
         v = self.v.unsqueeze(0)
         vspan_uv = torch.stack([torch.min(torch.where((v - V[s,self.q:-self.q].unsqueeze(1))>1e-8, v - V[s,self.q:-self.q].unsqueeze(1), (v - V[s,self.q:-self.q].unsqueeze(1))*0.0 + 1),0,keepdim=False)[1]+self.q for s in range(V.size(0))])
-
-
+        # print(u)
+        # print(uspan_uv)
+        # c = Counter(.tolist())
+        self.uspan_uv = uspan_uv
+        self.vspan_uv = vspan_uv
+        # self.uspan_uv = Counter(np.array(uspan_uv.cpu()).flatten().tolist())
+        # self.vspan_uv = Counter(np.array(vspan_uv.cpu()).flatten().tolist())
+        # print(np.shape(np.array(uspan_uv.cpu()).flatten()))
+        # uspan_uv, vspan_uv, _, _ = pre_compute_basis(self.u, self.v, self.U, self.V, m, n, p , q, out_dim_u, self._dimension)
         Ni = [v*0 for i in range(self.q+1)]
         Ni[0] = v*0 + 1
         for k in range(1,self.q+1):
@@ -120,18 +154,20 @@ class SurfEval(torch.nn.Module):
 
         pts = torch.stack([torch.stack([torch.stack([ctrl_pts[s,(uspan_uv[s,:]-self.p+l),:,:][:,(vspan_uv[s,:]-self.q+r),:] \
             for r in range(self.q+1)]) for l in range(self.p+1)]) for s in range(U.size(0))])
-
-
+        # print(vspan_uv)
+        # print(ctrl_pts[0,(uspan_uv[0,:]-self.p+0),:,:][:,(vspan_uv[0,:]-self.q+0),:].size())
+        # print(pts.size())
         # rational_pts = pts[:, :, :, :, :, :self._dimension]*pts[:, :, :, :, :, self._dimension:]
         # pts = torch.cat((rational_pts,pts[:, :, :, :, :, self._dimension:]),-1)
 
         # print((Nu_uv*Nv_uv).size(), pts.size())
         surfaces = torch.sum((Nu_uv*pts)*Nv_uv, (1,2))
-
+        # print(surfaces.size())
         # surfaces = torch.sum((Nu_uv*pts), (1,2))
         # print(surfaces[:,:,:,self._dimension].sum())
         # # print(surfaces.size())
         surfaces = surfaces[:,:,:,:self._dimension]#/surfaces[:,:,:,self._dimension].unsqueeze(-1)
+        # print(Counter(np.array(vspan_uv.cpu()).flatten().tolist()))
         return surfaces
 
 
@@ -193,7 +229,7 @@ class BasisFunc(torch.autograd.Function):
                 dU[s, :].scatter_(-1, (uspan_uv[s,:] + k).type_as(uspan_uv), dNu_uv[s, k, :], reduce='add')
         dU = dU*U
 
-
+        # print(Counter(np.array(ctx.vspan_uv.cpu()).flatten().tolist()))
         # for s in range(U.size(0)):
         #     for t in range(uspan_uv.size(1)):
         #         for k in range(1,p+1):
