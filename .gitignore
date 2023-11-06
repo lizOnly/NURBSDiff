@@ -134,3 +134,13 @@ dmypy.json
 *.stl
 *.png
 *.csv
+
+generated/duck_dynamic/
+
+generated/
+logs/
+models/
+
+logs/tensorboard/duck_dynamic_geo/1103171755/
+
+.idea/
