@@ -777,51 +777,11 @@ def main():
         # print(target.shape)
         target_list.append(target)
         
-        # target_list = target_list[:4]
-        # resolution_u = 4
-        # for i in range(len(target_list)):
-        #     target_list[i] /= range_coord
-        # target = torch.tensor(vertex_positions).reshape(1, resolution_u, resolution_v, 3).float().cuda()
-        # permute the rows in target
-        # target = target[:, :, torch.randperm(resolution), :]
+
 
         sample_size_u = resolution_u
         sample_size_v = resolution_v
-        
-    # with open('../../meshes/duck_irregular_shape_930.off', 'r') as f:
-    # # with open('ex_ducky.off', 'r') as f:
-    
-    #     lines = f.readlines()
 
-    #     # skip the first line
-    #     lines = lines[2:2 + resolution_u * resolution_v]
-    #     # lines = random.sample(lines, k=resolution * resolution)
-    #     # extract vertex positions
-    #     v = []
-    #     for line in lines:
-    #         x, y, z = map(float, line.split()[:3])
-    #         min_coord = min(min_coord, x, y, z)
-    #         max_coord = max(max_coord, x, y, z)
-    #         v.append((x, y, z))
-    #     range_coord = max(abs(min_coord), abs(max_coord))
-    #     range_coord = 1
-    #     v = np.array([(x/range_coord, y/range_coord, z/range_coord) for x, y, z in v]).reshape(resolution_u, resolution_v, 3)
-    #     print(v == np.array(target_list).reshape(31, 30, 3))
-    #     print(v[29, 13, :])
-    #     print(target_list[29][13, :])
-    # target = torch.tensor(np.array(target_list)).reshape(1, 31, 30, 3).float().cuda()
-        
-    ##########################################
-
-    # with open(f'generated/{object_name}/normalied_input_point_cloud.OFF', 'w') as f:
-    #     # Loop over the array rows
-    #     f.write('OFF\n')
-    #     f.write(str(resolution_u * resolution_v) + ' ' + '0 0\n')
-    #     for i in range(resolution_u):
-    #         for j in range(resolution_v):
-    #             # print(predicted_target[i, j, :])
-    #             line = str(vertex_positions[i, j, 0]) + ' ' + str(vertex_positions[i, j, 1]) + ' ' + str(vertex_positions[i, j, 2]) + '\n'
-    #             f.write(line)
     
     num_ctrl_pts1 = ctr_pts_u
     num_ctrl_pts2 = ctr_pts_v
@@ -829,8 +789,8 @@ def main():
     # num_eval_pts_v = resolution_v
     # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=True).float().cuda()
     # inp_ctrl_pts[:, :, 1:, :].detach_()
-    # inp_ctrl_pts = torch.nn.Parameter(torch.tensor(generate_cylinder(input_point_list, ctr_pts_u, ctr_pts_v, axis=axis, object_name=object_name), requires_grad=True).reshape(1, ctr_pts_u, ctr_pts_v,3).float().cuda())
-    inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
+    inp_ctrl_pts = torch.nn.Parameter(torch.tensor(generate_cylinder(input_point_list, ctr_pts_u, ctr_pts_v, axis=axis, object_name=object_name), requires_grad=True).reshape(1, ctr_pts_u, ctr_pts_v,3).float().cuda())
+    # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
     # inp_ctrl_pts[:, :10, :, :].detach()
     inp_ctrl_pts.requires_grad = True
     # inp_ctrl_pts = torch.cat((inp_ctrl_pts_first_row, inp_ctrl_pts_rest_rows), dim=2).float().cuda()
@@ -851,9 +811,9 @@ def main():
     # print(target.shape)
     layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=sample_size_u, out_dim_v=sample_size_v, method='tc', dvc='cuda').cuda()
     
-    opt1 = torch.optim.Adam(iter([inp_ctrl_pts, weights, knot_int_u, knot_int_v]), lr=0.5) 
+    opt1 = torch.optim.Adam(iter([inp_ctrl_pts, weights]), lr=0.5)
     opt2 = torch.optim.Adam(iter([knot_int_u, knot_int_v]), lr=1e-2)
-    lr_schedule1 = torch.optim.lr_scheduler.ReduceLROnPlateau(opt1, patience=10, factor=0.1, verbose=True, min_lr=1e-5, 
+    lr_schedule1 = torch.optim.lr_scheduler.ReduceLROnPlateau(opt1, patience=10, factor=0.1, verbose=True, min_lr=1e-5,
                                                               eps=1e-08, threshold=1e-4, threshold_mode='rel', cooldown=0,
                                                               )
     lr_schedule2 = torch.optim.lr_scheduler.ReduceLROnPlateau(opt2, patience=5, factor=0.1, verbose=True, min_lr=1e-5, 
@@ -912,10 +872,6 @@ def main():
            
 
             if ignore_uv:
-                # reg_loss, permute_cp = control_points_permute_closed_reg_loss(inp_ctrl_pts, ctr_pts_u, ctr_pts_v)
-                # print(reg_loss)
-                # print(permute_cp.shape)
-                # inp_ctrl_pts = permute_cp
                 lap = laplacian_loss_unsupervised(inp_ctrl_pts)
                 lap2 = laplacian_loss_unsupervised(out)
                 # lap3 = 0.00 * laplacian_loss_splinenet(out, target)
@@ -959,119 +915,63 @@ def main():
 
         out = layer((torch.cat((inp_ctrl_pts,weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
 
+
+        if (i + 1) % 1 == 0:
+            fig = plt.figure(figsize=(15, 4))
+            predicted = out.detach().cpu().numpy().squeeze()
+            # ctrlpts = inp_ctrl_pts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
+            predctrlpts = inp_ctrl_pts.detach().cpu().numpy().squeeze()
+            predctrlptsctrlpts = predctrlpts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
+
+            ax2 = fig.add_subplot(132, projection='3d', adjustable='box')
+            surf2 = ax2.plot_wireframe(predicted[:, :, 0], predicted[:, :, 1], predicted[:, :, 2], color='green',
+                                       label='Predicted Surface')
+            surf2 = ax2.plot_wireframe(predctrlpts[:, :, 0], predctrlpts[:, :, 1], predctrlpts[:, :, 2],
+                                       linestyle='dashed', color='orange', label='Predicted Control Points')
+            ax2.azim = 45
+            ax2.dist = 6.5
+            ax2.elev = 30
+            ax2.set_xticks([])
+            ax2.set_yticks([])
+            ax2.set_zticks([])
+            ax2.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+            ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+            ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+            ax2._axis3don = False
+            # ax.legend(loc='upper left')
+            # ax.set_xlabel('X')
+            # ax.set_ylabel('Y')
+            # ax.set_zlabel('Z')
+            # ax.set_zlim(-1,3)
+            # ax.set_xlim(-1,4)
+            # ax.set_ylim(-2,2)
+            # ax3 = fig.add_subplot(133, adjustable='box')
+            # # error_map = (((predicted - target_mpl) ** 2) / target_mpl).sum(-1)
+            # # # im3 = ax.imshow(error_map, cmap='jet', interpolation='none', extent=[0,128,0,128])
+            # # im3 = ax3.imshow(error_map, cmap='jet', interpolation='none', extent=[0, 128, 0, 128], vmin=-0.001,
+            # #                  vmax=0.001)
+            # # fig.colorbar(im3, shrink=0.4, aspect=5)
+            # fig.colorbar(im3, shrink=0.4, aspect=5, ticks=[-0.001, 0, 0.001])
+            # ax3.set_xlabel('$u$')
+            # ax3.set_ylabel('$v$')
+
+            plt.show()
+
         if loss.item() < 1e-6:
             print((time.time() - time1)/ (i + 1)) 
             break
         
         pbar.set_description("Loss %s: %s" % (i+1, loss.item()))
-    
 
-    # for j in range(inp_ctrl_pts.shape[1] + inp_ctrl_pts.shape[2]):
-    #     # move inp_ctrl_pts away from gpu
-    #     inp_ctrl_pts_cpu = inp_ctrl_pts.detach().cpu()
-    #     if j < inp_ctrl_pts.shape[1]:
-    #         # use clone to clone tensor
-    #         left = inp_ctrl_pts_cpu[:, :j, :, :].clone().detach().requires_grad_(False).float().cuda()
-    #         print(left.is_leaf)
-    #         right = inp_ctrl_pts_cpu[:, j+1:, :, :].clone().detach().requires_grad_(False).float().cuda()
-    #         print(right.is_leaf)
-    #         subset = inp_ctrl_pts_cpu[:, j:j+1, :, :].clone().detach()
-    #         subset.requires_grad = True
-    #         subset = subset.float().cuda()
-    #         print(subset.is_leaf)
-    #         inp_ctrl_pts = torch.cat((left, subset, right), dim=1).float().cuda()
-    #         # inp_ctrl_pts = inp_ctrl_pts_cpu.float().cuda()
-    #         opt1 = torch.optim.Adam(iter([inp_ctrl_pts]), lr=0.1)
-    #     else:
-    #         left = torch.tensor(inp_ctrl_pts[:, :, :j - inp_ctrl_pts.shape[1], :], requires_grad=False).float().cuda()
-    #         right = torch.tensor(inp_ctrl_pts[:, :, j - inp_ctrl_pts.shape[1] + 1:, :], requires_grad=False).float().cuda()
-    #         subset = torch.nn.Parameter(torch.tensor(inp_ctrl_pts[:, :, j - inp_ctrl_pts.shape[1]:j - inp_ctrl_pts.shape[1] + 1, :], requires_grad=True).float().cuda())
-    #         opt1 = torch.optim.Adam(iter([subset]), lr=0.1)
-    #         inp_ctrl_pts = torch.cat((left, subset, right), dim=2).float().cuda()
-    #     # opt2 = torch.optim.Adam(iter([knot_int_u, knot_int_v]), lr=1e-2)
-    #     lr_schedule1 = torch.optim.lr_scheduler.ReduceLROnPlateau(opt1, patience=10, factor=0.2, verbose=True, min_lr=1e-4, 
-    #                                                           eps=1e-08, threshold=1e-4, threshold_mode='rel', cooldown=0,
-    #                                                           )
-
-    #     pbar = tqdm(range(num_epochs // 2))
-    #     for i in pbar:
-    #         # torch.cuda.empty_cache()
-    #         knot_rep_p_0 = torch.zeros(1,p+1).cuda()
-    #         knot_rep_p_1 = torch.zeros(1,p).cuda()
-    #         knot_rep_q_0 = torch.zeros(1,q+1).cuda()
-    #         knot_rep_q_1 = torch.zeros(1,q).cuda()
-
-    #         with torch.no_grad():
-    #             inp_ctrl_pts[:, 0, :, :] = inp_ctrl_pts[:, 0, :, :].mean(1)
-    #             inp_ctrl_pts[:, -1, :, :] = inp_ctrl_pts[:, -1, :, :].mean(1)
-    #             inp_ctrl_pts[:, :, 0, :] = inp_ctrl_pts[:, :, -1, :] = (inp_ctrl_pts[:, :, 0, :] + inp_ctrl_pts[:, :, -1, :]) / 2
-    #             # inp_ctrl_pts[:, :, 1, :] = inp_ctrl_pts[:, :, -2, :] = (inp_ctrl_pts[:, :, 1, :] + inp_ctrl_pts[:, :, -2, :]) / 2
-    #             # inp_ctrl_pts[:, :, 2, :] = inp_ctrl_pts[:, :, -1, :] = (inp_ctrl_pts[:, :, 2, :] + inp_ctrl_pts[:, :, -1, :]) / 2
-    #             pass
-            
-    #         def closure():
-
-    #             opt1.zero_grad()
-    #             out = layer((torch.cat((inp_ctrl_pts,weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
-    #             loss = 0
-
-    #             if ignore_uv:
-    #                 lap = laplacian_loss_unsupervised(inp_ctrl_pts)
-    #                 lap2 = laplacian_loss_unsupervised(out)
-    #                 # lap3 = 0.00 * laplacian_loss_splinenet(out, target)
-    #                 edges_loss = 0.10 * compute_edge_lengths(inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2)
-    #                 # compute dif between first column and last column  of control points
-    #                 input_ctrl_pts_alter = inp_ctrl_pts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
-    #                 close_loss_single_column = torch.norm(input_ctrl_pts_alter[:, 0, :] - input_ctrl_pts_alter[:, -1, :])
-    #                 close_loss_column =  (
-    #                                             torch.norm(input_ctrl_pts_alter[:, 0, :] - input_ctrl_pts_alter[:, -3, :]) +
-    #                                             torch.norm(input_ctrl_pts_alter[:, 1, :] - input_ctrl_pts_alter[:, -2, :]) +
-    #                                             torch.norm(input_ctrl_pts_alter[:, 2, :] - input_ctrl_pts_alter[:, -1, :])
-    #                                         )
-    #                 close_loss_row =  torch.norm(input_ctrl_pts_alter[0, :, :] - input_ctrl_pts_alter[-1, :, :])
-    #                 # lap2 = 0.001 * laplacian_loss_splinenet(out, target)
-    #                 out = out.reshape(sample_size_u, sample_size_v, 3)
-    #                 # tgt = target.reshape(sample_size_u, sample_size_v, 3)
-    #                 out_knn = out.permute(0, 2, 1)
-    #                 # tgt_knn = tgt.permute(0, 2, 1)
-    #                 input_ctrl_pts_knn = input_ctrl_pts_alter.permute(0, 2, 1)
-
-    #                 if loss_type == 'chamfer':
-
-    #                     loss += 0.9 * chamfer_distance_each_row(out, target_list) + 0.1 * lap 
-    #                     log_value('chamfer_distance', chamfer_distance_each_row(out, target_list), i)
-    #                     log_value('laplacian_loss', lap * 10, i)
-    #                     log_value('close_loss_column', close_loss_column, i)
-
-    #             loss.sum().backward(retain_graph=True)
-    #             return loss
-
-    #         loss = opt1.step(closure)
-    #         lr_schedule1.step(loss)
-
-    #         out = layer((torch.cat((inp_ctrl_pts,weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
-
-    #         if loss.item() < 1e-6:
-    #             print((time.time() - time1)/ (i + 1)) 
-    #             break
-            
-    #         pbar.set_description("Loss %s: %s" % (i+1, loss.item()))
-    print((time.time() - time1)/ (num_epochs+1)) 
-
-    # train_uspan_uv, train_vspan_uv = layer.getuvspan()
-    # target_uspan_uv, target_vspan_uv = layer.getuvsapn()
-    # print(inp_ctrl_pts)
+    print((time.time() - time1)/ (num_epochs+1))
 
     U, V = layer.getrealUV()       
     U = U.detach().cpu().numpy().reshape(-1, 1)
     V = V.detach().cpu().numpy().reshape(-1, 1)
     target_mpl = target.cpu().numpy().squeeze()
-    # target_mpl = target_mpl.reshape(-1, 3)
-    # print(out.shape)
+
     predicted = out.detach().cpu().numpy().squeeze()
-    # predicted = predicted.reshape(-1, 3)
-    # predictedknotu = utilities.generate_knot_vector(4, num_ctrl_pts1)
-    # predictedknotv = utilities.generate_knot_vector(4, num_ctrl_pts2)
+
     predictedweights = weights.detach().cpu().numpy().squeeze(0)
     predictedctrlpts = inp_ctrl_pts.detach().cpu().numpy().squeeze()
     # print(predictedweights.shape)
@@ -1253,7 +1153,7 @@ def main():
     fig.legend(lines, labels, ncol=2, loc='lower left', bbox_to_anchor=(0.33, 0.0), )
     # plt.savefig('ducky_reparameterization_no_ctrpts.pdf')
     # plt.savefig(f'u_{object_name}_ctrpts_{ctr_pts}_eval_{resolution_u}x{resolution_v}_reconstruct_{out_dim}.pdf')
-    plt.show()
+    # plt.show()
 
     with open(f'generated/{object_name}/trained_ctrpts_{ctr_pts}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.OFF', 'w') as f:
         # Loop over the array rows

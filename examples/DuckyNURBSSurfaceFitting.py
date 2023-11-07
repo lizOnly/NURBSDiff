@@ -154,21 +154,32 @@ def main():
         #     inp_ctrl_pts[:,-1,:,:] = (inp_ctrl_pts[:,-1,:,:]).mean(1)
         #     inp_ctrl_pts[:,:,0,:] = inp_ctrl_pts[:,:,-1,:] = (inp_ctrl_pts[:,:,0,:] + inp_ctrl_pts[:,:,-1,:])/2
 
-        out = layer((torch.cat((inp_ctrl_pts,weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
+        out = layer((torch.cat((inp_ctrl_pts,weights), -1), torch.cat((knot_rep_p_0, knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
         target = target.reshape(1,num_eval_pts_u,num_eval_pts_v,3)
-        #convert to numpy
-        outnp = out.detach().cpu().numpy().squeeze()
-        targetnp = target.detach().cpu().numpy().squeeze()
-        #convert to point cloud
-        #reshape to points
-        outnp = outnp.reshape(num_eval_pts_u*num_eval_pts_v,3)
-        targetnp = targetnp.reshape(num_eval_pts_u*num_eval_pts_v,3)
+        # #convert to numpy
 
-        plot_points3d(outnp, 'green')
-        plot_points3d(targetnp, 'blue')
+        #convert knots to numpy
+        # inp_ctrl_pts_np = inp_ctrl_pts.detach().cpu().numpy().squeeze()
+        # knot_rep_p_0_np = knot_rep_p_0.detach().cpu().numpy().squeeze()
+        # knot_int_u_np = knot_int_u.detach().cpu().numpy().squeeze()
+        # knot_rep_q_0_np = knot_rep_q_0.detach().cpu().numpy().squeeze()
+        # knot_rep_p_1_np = knot_rep_p_1.detach().cpu().numpy().squeeze()
+        # knot_int_v_np = knot_int_v.detach().cpu().numpy().squeeze()
+        # knot_rep_q_1_np = knot_rep_q_1.detach().cpu().numpy().squeeze()
+
+
+        outnp = out.detach().cpu().numpy().squeeze()
+        # targetnp = target.detach().cpu().numpy().squeeze()
+        # #convert to point cloud
+        # #reshape to points
+        outnp = outnp.reshape(num_eval_pts_u*num_eval_pts_v,3)
+        # targetnp = targetnp.reshape(num_eval_pts_u*num_eval_pts_v,3)
+
+        # plot_points3d(outnp, 'green')
+        # plot_points3d(targetnp, 'blue')
         out = out.reshape(1,num_eval_pts_u,num_eval_pts_v,3)
 
-        if (i+1)%80001 == 0:
+        if (i+1)%1 == 0:
             fig = plt.figure(figsize=(15,4))
             ax1 = fig.add_subplot(131, projection='3d', adjustable='box', proj_type = 'ortho')
             target_mpl = target.cpu().numpy().squeeze()
