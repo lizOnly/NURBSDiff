@@ -847,19 +847,19 @@ def main():
         knot_rep_q_1 = torch.zeros(1,q).cuda()
 
         with torch.no_grad():
-            # #rows
-            # inp_ctrl_pts[:, 0, :, :] = inp_ctrl_pts[:, 0, :, :].mean(1)
-            # inp_ctrl_pts[:, -1, :, :] = inp_ctrl_pts[:, -1, :, :].mean(1)
-            # inp_ctrl_pts[:, :, 0, :] = inp_ctrl_pts[:, :, -3, :] = (inp_ctrl_pts[:, :, 0, :] + inp_ctrl_pts[:, :, -3, :]) / 2
-            # inp_ctrl_pts[:, :, 1, :] = inp_ctrl_pts[:, :, -2, :] = (inp_ctrl_pts[:, :, 1, :] + inp_ctrl_pts[:, :, -2, :]) / 2
-            # inp_ctrl_pts[:, :, 2, :] = inp_ctrl_pts[:, :, -1, :] = (inp_ctrl_pts[:, :, 2, :] + inp_ctrl_pts[:, :, -1, :]) / 2
-
-            #colums
+        #     # #rows
+        #     # inp_ctrl_pts[:, 0, :, :] = inp_ctrl_pts[:, 0, :, :].mean(1)
+        #     # inp_ctrl_pts[:, -1, :, :] = inp_ctrl_pts[:, -1, :, :].mean(1)
+        #     # inp_ctrl_pts[:, :, 0, :] = inp_ctrl_pts[:, :, -3, :] = (inp_ctrl_pts[:, :, 0, :] + inp_ctrl_pts[:, :, -3, :]) / 2
+        #     # inp_ctrl_pts[:, :, 1, :] = inp_ctrl_pts[:, :, -2, :] = (inp_ctrl_pts[:, :, 1, :] + inp_ctrl_pts[:, :, -2, :]) / 2
+        #     # inp_ctrl_pts[:, :, 2, :] = inp_ctrl_pts[:, :, -1, :] = (inp_ctrl_pts[:, :, 2, :] + inp_ctrl_pts[:, :, -1, :]) / 2
+        #
+        #     #colums
             inp_ctrl_pts[:, :, 0, :] = inp_ctrl_pts[:, :, 0, :].mean(1)
             inp_ctrl_pts[:, :, -1, :] = inp_ctrl_pts[:, :, -1, :].mean(1)
-            inp_ctrl_pts[:, 0, :, :] = inp_ctrl_pts[:, -3, :, :] = (inp_ctrl_pts[:, 0, :, :] + inp_ctrl_pts[:, -3, :, :]) / 2
-            inp_ctrl_pts[:, 1, :, :] = inp_ctrl_pts[:, -2, :, :] = (inp_ctrl_pts[:, 1, :, :] + inp_ctrl_pts[:, -2, :, :]) / 2
-            inp_ctrl_pts[:, 2, :, :] = inp_ctrl_pts[:, -1, :, :] = (inp_ctrl_pts[:, 2, :, :] + inp_ctrl_pts[:, -1, :, :]) / 2
+            #     inp_ctrl_pts[:, 0, :, :] = inp_ctrl_pts[:, -3, :, :] = (inp_ctrl_pts[:, 0, :, :] + inp_ctrl_pts[:, -3, :, :]) / 2
+            #     inp_ctrl_pts[:, 1, :, :] = inp_ctrl_pts[:, -2, :, :] = (inp_ctrl_pts[:, 1, :, :] + inp_ctrl_pts[:, -2, :, :]) / 2
+            #     inp_ctrl_pts[:, 2, :, :] = inp_ctrl_pts[:, -1, :, :] = (inp_ctrl_pts[:, 2, :, :] + inp_ctrl_pts[:, -1, :, :]) / 2
             pass
         
         def closure():
