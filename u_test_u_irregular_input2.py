@@ -789,8 +789,8 @@ def main():
     # num_eval_pts_v = resolution_v
     # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=True).float().cuda()
     # inp_ctrl_pts[:, :, 1:, :].detach_()
-    inp_ctrl_pts = torch.nn.Parameter(torch.tensor(generate_cylinder(input_point_list, ctr_pts_u, ctr_pts_v, axis=axis, object_name=object_name), requires_grad=True).reshape(1, ctr_pts_u, ctr_pts_v,3).float().cuda())
-    # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
+    # inp_ctrl_pts = torch.nn.Parameter(torch.tensor(generate_cylinder(input_point_list, ctr_pts_u, ctr_pts_v, axis=axis, object_name=object_name), requires_grad=True).reshape(1, ctr_pts_u, ctr_pts_v,3).float().cuda())
+    inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
     # inp_ctrl_pts[:, :10, :, :].detach()
     inp_ctrl_pts.requires_grad = True
     # inp_ctrl_pts = torch.cat((inp_ctrl_pts_first_row, inp_ctrl_pts_rest_rows), dim=2).float().cuda()
@@ -849,8 +849,8 @@ def main():
         with torch.no_grad():
             inp_ctrl_pts[:, 0, :, :] = inp_ctrl_pts[:, 0, :, :].mean(1)
             inp_ctrl_pts[:, -1, :, :] = inp_ctrl_pts[:, -1, :, :].mean(1)
-            inp_ctrl_pts[:, :, 0, :] = inp_ctrl_pts[:, :, -3, :] = (inp_ctrl_pts[:, :, 0, :] + inp_ctrl_pts[:, :, -3, :]) / 2
-            inp_ctrl_pts[:, :, 1, :] = inp_ctrl_pts[:, :, -2, :] = (inp_ctrl_pts[:, :, 1, :] + inp_ctrl_pts[:, :, -2, :]) / 2
+            # inp_ctrl_pts[:, :, 0, :] = inp_ctrl_pts[:, :, -3, :] = (inp_ctrl_pts[:, :, 0, :] + inp_ctrl_pts[:, :, -3, :]) / 2
+            # inp_ctrl_pts[:, :, 1, :] = inp_ctrl_pts[:, :, -2, :] = (inp_ctrl_pts[:, :, 1, :] + inp_ctrl_pts[:, :, -2, :]) / 2
             inp_ctrl_pts[:, :, 2, :] = inp_ctrl_pts[:, :, -1, :] = (inp_ctrl_pts[:, :, 2, :] + inp_ctrl_pts[:, :, -1, :]) / 2
             pass
         
@@ -916,7 +916,7 @@ def main():
         out = layer((torch.cat((inp_ctrl_pts,weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
 
 
-        if (i + 1) % 1 == 0:
+        if (i + 1) % 1000 == 0:
             fig = plt.figure(figsize=(15, 4))
             predicted = out.detach().cpu().numpy().squeeze()
             # ctrlpts = inp_ctrl_pts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
@@ -1039,16 +1039,16 @@ def main():
     # print(predicted_extended)
     # print(np.shape(predicted_extended))
        
-    ax1 = fig.add_subplot(151, projection='3d', adjustable='box', proj_type='ortho', aspect='equal')
-    # ax1.set_box_aspect([1,1,1])
-    # ax1.plot_wireframe(target_mpl[:, :, 0], target_mpl[:, :, 1], target_mpl[:, :,2], color='red', label='GT Surface')
-    adjust_plot(ax1)
-
-    ax2 = fig.add_subplot(152, projection='3d', adjustable='box', proj_type='ortho', aspect='equal')
-    # ax2.set_box_aspect([1,1,1])
-    # ax2.plot_wireframe(predictedctrlpts[:, :,0], predictedctrlpts[:, :, 1], predictedctrlpts[:, :, 2], color='blue', label=['Predicted Control Points'])
-    ax2.plot_wireframe(predicted[:, :, 0], predicted[:, :,1], predicted[:, :,2], color='lightgreen', label='Predicted Surface')
-    adjust_plot(ax2)
+    # ax1 = fig.add_subplot(151, projection='3d', adjustable='box', proj_type='ortho', aspect='equal')
+    # # ax1.set_box_aspect([1,1,1])
+    # # ax1.plot_wireframe(target_mpl[:, :, 0], target_mpl[:, :, 1], target_mpl[:, :,2], color='red', label='GT Surface')
+    # adjust_plot(ax1)
+    #
+    # ax2 = fig.add_subplot(152, projection='3d', adjustable='box', proj_type='ortho', aspect='equal')
+    # # ax2.set_box_aspect([1,1,1])
+    # # ax2.plot_wireframe(predictedctrlpts[:, :,0], predictedctrlpts[:, :, 1], predictedctrlpts[:, :, 2], color='blue', label=['Predicted Control Points'])
+    # ax2.plot_wireframe(predicted[:, :, 0], predicted[:, :,1], predicted[:, :,2], color='lightgreen', label='Predicted Surface')
+    # adjust_plot(ax2)
 
     # u_indices = (layer.getuindices()).cpu().numpy()
     # v_indices = layer.getvindices().cpu().numpy()
@@ -1084,18 +1084,18 @@ def main():
     # predicted_target = predicted_target_eval_layer(predicted_target_ctrl_pts).float().cuda()
     # predicted_target = predicted_target.detach().cpu().numpy().squeeze(0).reshape(-1, 256, 256, 3)
 
-    ax3 = fig.add_subplot(153, projection='3d', adjustable='box', proj_type='ortho', aspect='equal')
-    # ax3.set_box_aspect([1,1,1])
-
-    try:
-        # ax3.plot_wireframe(predictedctrlpts[:, :, 0], predictedctrlpts[:, :, 1], predictedctrlpts[:, :, 2], color='lightgreen', label=['Predicted Control points'])
-        ax3.plot_wireframe(predictedctrlpts[:, :, 0], predictedctrlpts[:, :, 1], predictedctrlpts[:, :, 2], color='violet', label='Predicted control polygon')
-    except Exception as e:
-        print(e)
-    adjust_plot(ax3)
-
-    ax4 = fig.add_subplot(154, projection='3d', adjustable='box', proj_type='ortho', aspect='equal')
-    # ax4.set_box_aspect([1,1,1])
+    # ax3 = fig.add_subplot(153, projection='3d', adjustable='box', proj_type='ortho', aspect='equal')
+    # # ax3.set_box_aspect([1,1,1])
+    #
+    # try:
+    #     # ax3.plot_wireframe(predictedctrlpts[:, :, 0], predictedctrlpts[:, :, 1], predictedctrlpts[:, :, 2], color='lightgreen', label=['Predicted Control points'])
+    #     ax3.plot_wireframe(predictedctrlpts[:, :, 0], predictedctrlpts[:, :, 1], predictedctrlpts[:, :, 2], color='violet', label='Predicted control polygon')
+    # except Exception as e:
+    #     print(e)
+    # adjust_plot(ax3)
+    #
+    # ax4 = fig.add_subplot(154, projection='3d', adjustable='box', proj_type='ortho', aspect='equal')
+    # # ax4.set_box_aspect([1,1,1])
 
     layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=out_dim_u, out_dim_v=out_dim_v, method='tc', dvc='cuda').cuda()
     knot_rep_p_0 = torch.zeros(1,p+1).cuda()
@@ -1115,8 +1115,8 @@ def main():
     # print(extended_inp_ctrl_pts.shape)
     out2 = layer((torch.cat((inp_ctrl_pts, weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
     out2 = out2.detach().cpu().numpy().squeeze(0).reshape(out_dim_u, out_dim_v, 3)
-    ax4.plot_wireframe(out2[:, :, 0], out2[:, :, 1], out2[:, :, 2], color='cyan', label='Reconstructed Surface')
-    adjust_plot(ax4)
+    # ax4.plot_wireframe(out2[:, :, 0], out2[:, :, 1], out2[:, :, 2], color='cyan', label='Reconstructed Surface')
+    # adjust_plot(ax4)
 
     # target_mpl = target_mpl.reshape(resolution_u, resolution_v, 3)
     predicted = predicted.reshape(sample_size_u, sample_size_v, 3)
@@ -1127,7 +1127,7 @@ def main():
     # ax5.plot_wireframe(out_first_row[:, :, 0], out_first_row[:, :, 1], out_first_row[:, :, 2], color='lightgreen', label='Predicted Surface')
     # # im5 = ax5.imshow(error_map, cmap='jet', interpolation='none', extent=[0, 128, 0, 128], vmin=-0.001, vmax=0.001)
     # adjust_plot(ax5)
-    plt.show()
+    # plt.show()
     # error_map = (((predicted - target_mpl) ** 2) / target_mpl).sum(-1)
 
     # im5 = ax5.imshow(error_map, cmap='jet', interpolation='none', extent=[0, 128, 0, 128], vmin=-0.001, vmax=0.001)
@@ -1143,14 +1143,14 @@ def main():
     # ax5 = fig.add_subplot(235, projection='3d', adjustable='box')
     # plot_diff_subfigure(target_mpl - predicted, ax5)
 
-    fig.subplots_adjust(hspace=0, wspace=0)
-    fig.tight_layout()
-    lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes[:]]
-    lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
-
-    # finally we invoke the legend (that you probably would like to customize...)
-
-    fig.legend(lines, labels, ncol=2, loc='lower left', bbox_to_anchor=(0.33, 0.0), )
+    # fig.subplots_adjust(hspace=0, wspace=0)
+    # fig.tight_layout()
+    # lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes[:]]
+    # lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
+    #
+    # # finally we invoke the legend (that you probably would like to customize...)
+    #
+    # fig.legend(lines, labels, ncol=2, loc='lower left', bbox_to_anchor=(0.33, 0.0), )
     # plt.savefig('ducky_reparameterization_no_ctrpts.pdf')
     # plt.savefig(f'u_{object_name}_ctrpts_{ctr_pts}_eval_{resolution_u}x{resolution_v}_reconstruct_{out_dim}.pdf')
     # plt.show()
