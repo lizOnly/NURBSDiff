@@ -12,7 +12,7 @@
 import os
 from geomdl import NURBS
 from geomdl import exchange, utilities
-from geomdl.visualization import VisMPL as vis
+# from geomdl.visualization import VisMPL as vis
 from geomdl import operations
 
 def reconstructed_mesh(object_name, filename, num_ctrl_pts1, num_ctrl_pts2, u, v):
@@ -35,7 +35,7 @@ def reconstructed_mesh(object_name, filename, num_ctrl_pts1, num_ctrl_pts2, u, v
     surf.knotvector_v = list(v)
 
     surf.sample_size = 40
-    surf.vis = vis.VisSurface()
+    # surf.vis = vis.VisSurface()
     # operations.refine_knotvector(surf, [0, 1])
     
     surf.render()
@@ -61,7 +61,7 @@ def reconstructed_mesh_with_weights(object_name, filename, u, v):
     surf.knotvector_v = list(v)
 
     surf.sample_size = 40
-    surf.vis = vis.VisSurface()
+    # surf.vis = vis.VisSurface()
     # operations.refine_knotvector(surf, [0, 1])
     
     surf.render()
@@ -91,7 +91,7 @@ def reconstructed_mesh_test(object_name, filename, num_ctrl_pts1, num_ctrl_pts2)
     surf.knotvector_v = utilities.generate_knot_vector(surf.degree_v, surf.ctrlpts_size_v)
 
     surf.sample_size = 30
-    surf.vis = vis.VisSurface()
+    # surf.vis = vis.VisSurface()
     
     surf.render()
 

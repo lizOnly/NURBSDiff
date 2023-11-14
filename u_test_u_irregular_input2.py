@@ -4,7 +4,7 @@ import torch
 import numpy as np
 
 #from DuckyFittingOriginal import read_weights
-from examples.splinenet import DGCNNControlPoints, get_graph_feature
+# from examples.splinenet import DGCNNControlPoints, get_graph_feature
 from examples.test.mesh_reconstruction import reconstructed_mesh
 # from examples.test.test_dgcnn import DGCNN, DGCNN_without_grad
 torch.manual_seed(120)
@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 from geomdl import exchange, utilities
-from geomdl.visualization import VisMPL
+# from geomdl.visualization import VisMPL
 from geomdl import compatibility
 from torch.autograd.variable import Variable
 import torch.nn.functional as F
@@ -709,7 +709,7 @@ def compute_edge_lengths(points, u, v):
 
 def main():
  
-    gt_path = "../../meshes/ducky"
+    gt_path = "/mnt/Chest/Repositories/pygeodesics/data/duck_clean.obj"
     ctr_pts = 15
     # resolution_u = 64
     # resolution_v = 64
@@ -742,7 +742,7 @@ def main():
 
     input_point_list = []
     
-    with open('../../meshes/spherical/resampled_ducky.txt', 'r') as f:
+    with open('/mnt/Chest/Repositories/NURBSDiff/data/cm_duck.txt', 'r') as f:
     # with open('../../meshes/cube_cluster0_geodesic.txt', 'r') as f:
     # with open('ex_ducky.off', 'r') as f:
     

@@ -2,14 +2,14 @@ import torch
 import numpy as np
 torch.manual_seed(120)
 from tqdm import tqdm
-from pytorch3d.loss import chamfer_distance
+#from pytorch3d.loss import chamfer_distance
 from NURBSDiff.nurbs_eval import SurfEval
 from NURBSDiff.surf_eval import SurfEval as SurfEvalBS
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 from geomdl import exchange
-from geomdl.visualization import VisMPL
+#from geomdl.visualization import VisMPL
 from geomdl import compatibility
 # import offset_eval as off
 
@@ -78,7 +78,7 @@ def main():
         target_eval_layer = SurfEvalBS(num_ctrl_pts1, num_ctrl_pts2, knot_u=knot_u, knot_v=knot_v, dimension=3, p=3, q=3, out_dim_u=num_eval_pts_u, out_dim_v=num_eval_pts_v)
         target = target_eval_layer(target_ctrl_pts).float().cuda()
 
-        # PTS = target.detach().numpy().squeeze()
+        target_np = target.detach().cpu().numpy().squeeze()
         # Max_size = off.Max_size(np.reshape(PTS, [1, num_eval_pts_u * num_eval_pts_v, 3]))
         inp_ctrl_pts = torch.nn.Parameter(torch.rand((1,num_ctrl_pts1,num_ctrl_pts2,3), requires_grad=True).float().cuda())
 
@@ -179,7 +179,7 @@ def main():
         # plot_points3d(targetnp, 'blue')
         out = out.reshape(1,num_eval_pts_u,num_eval_pts_v,3)
 
-        if (i+1)%1 == 0:
+        if (i+1)%30 == 0:
             fig = plt.figure(figsize=(15,4))
             ax1 = fig.add_subplot(131, projection='3d', adjustable='box', proj_type = 'ortho')
             target_mpl = target.cpu().numpy().squeeze()
