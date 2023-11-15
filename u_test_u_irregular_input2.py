@@ -791,6 +791,8 @@ def main():
     # inp_ctrl_pts[:, :, 1:, :].detach_()
     # inp_ctrl_pts = torch.nn.Parameter(torch.tensor(generate_cylinder(input_point_list, ctr_pts_u, ctr_pts_v, axis=axis, object_name=object_name), requires_grad=True).reshape(1, ctr_pts_u, ctr_pts_v,3).float().cuda())
     inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
+    # Read control points from file
+    # inp_ctrl_pts = torch.tensor(np.loadtxt(f'generated/{object_name}/control_points.txt')).reshape(1, ctr_pts_u, ctr_pts_v,3).float().cuda()
     # inp_ctrl_pts[:, :10, :, :].detach()
     inp_ctrl_pts.requires_grad = True
     # inp_ctrl_pts = torch.cat((inp_ctrl_pts_first_row, inp_ctrl_pts_rest_rows), dim=2).float().cuda()
@@ -848,18 +850,12 @@ def main():
 
         with torch.no_grad():
         #     # #rows
-        #     # inp_ctrl_pts[:, 0, :, :] = inp_ctrl_pts[:, 0, :, :].mean(1)
-        #     # inp_ctrl_pts[:, -1, :, :] = inp_ctrl_pts[:, -1, :, :].mean(1)
-        #     # inp_ctrl_pts[:, :, 0, :] = inp_ctrl_pts[:, :, -3, :] = (inp_ctrl_pts[:, :, 0, :] + inp_ctrl_pts[:, :, -3, :]) / 2
-        #     # inp_ctrl_pts[:, :, 1, :] = inp_ctrl_pts[:, :, -2, :] = (inp_ctrl_pts[:, :, 1, :] + inp_ctrl_pts[:, :, -2, :]) / 2
-        #     # inp_ctrl_pts[:, :, 2, :] = inp_ctrl_pts[:, :, -1, :] = (inp_ctrl_pts[:, :, 2, :] + inp_ctrl_pts[:, :, -1, :]) / 2
-        #
-        #     #colums
-            inp_ctrl_pts[:, :, 0, :] = inp_ctrl_pts[:, :, 0, :].mean(1)
-            inp_ctrl_pts[:, :, -1, :] = inp_ctrl_pts[:, :, -1, :].mean(1)
-            #     inp_ctrl_pts[:, 0, :, :] = inp_ctrl_pts[:, -3, :, :] = (inp_ctrl_pts[:, 0, :, :] + inp_ctrl_pts[:, -3, :, :]) / 2
-            #     inp_ctrl_pts[:, 1, :, :] = inp_ctrl_pts[:, -2, :, :] = (inp_ctrl_pts[:, 1, :, :] + inp_ctrl_pts[:, -2, :, :]) / 2
-            #     inp_ctrl_pts[:, 2, :, :] = inp_ctrl_pts[:, -1, :, :] = (inp_ctrl_pts[:, 2, :, :] + inp_ctrl_pts[:, -1, :, :]) / 2
+            inp_ctrl_pts[:, 0, :, :] = inp_ctrl_pts[:, 0, :, :].mean(1)
+            inp_ctrl_pts[:, -1, :, :] = inp_ctrl_pts[:, -1, :, :].mean(1)
+            inp_ctrl_pts[:, :, 0, :] = inp_ctrl_pts[:, :, -3, :] = (inp_ctrl_pts[:, :, 0, :] + inp_ctrl_pts[:, :, -3, :]) / 2
+            inp_ctrl_pts[:, :, 1, :] = inp_ctrl_pts[:, :, -2, :] = (inp_ctrl_pts[:, :, 1, :] + inp_ctrl_pts[:, :, -2, :]) / 2
+            inp_ctrl_pts[:, :, 2, :] = inp_ctrl_pts[:, :, -1, :] = (inp_ctrl_pts[:, :, 2, :] + inp_ctrl_pts[:, :, -1, :]) / 2
+
             pass
         
         def closure():
