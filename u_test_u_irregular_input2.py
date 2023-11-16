@@ -900,11 +900,11 @@ def main():
 
 
                 if loss_type == 'chamfer':
-                    # if global loss
+                    # # if global loss
                     # tgt = torch.stack(target_list)
+                    # tgt = tgt.reshape(-1, 3).unsqueeze(0)
                     # out = out.reshape(1, sample_size_u*sample_size_v, 3)
-                    # # tgt = tgt.reshape(1, sample_size_u*sample_size_v, 3)
-                    # loss = chamfer_distance(out, tgt)
+                    # loss = chamfer_distance(out, tgt) + 0.1 * lap
 
                     loss = 0.9 * chamfer_distance_each_row(out, target_list) + 0.1 * lap
 
