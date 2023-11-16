@@ -710,7 +710,7 @@ def compute_edge_lengths(points, u, v):
 def main():
  
     gt_path = "/mnt/Chest/Repositories/pygeodesics/data/duck_clean.obj"
-    ctr_pts = 15
+    # ctr_pts = 40
     # resolution_u = 64
     # resolution_v = 64
     p = q = 3
@@ -741,6 +741,7 @@ def main():
     max_coord = min_coord = 0
 
     input_point_list = []
+    target_list = []
     
     with open('/mnt/Chest/Repositories/NURBSDiff/data/cm_duck.txt', 'r') as f:
     # with open('../../meshes/cube_cluster0_geodesic.txt', 'r') as f:
@@ -755,7 +756,7 @@ def main():
         
         resolution_u = 0
         vertex_positions = []
-        target_list = []
+
         for line in lines:
             if line.startswith('#'):
                 resolution_u += 1
@@ -774,10 +775,8 @@ def main():
         # range_coord = max(abs(min_coord), abs(max_coord))
         # range_coord = 1
         target = torch.tensor(vertex_positions).float().cuda()
-        # print(target.shape)
+        print(target.shape)
         target_list.append(target)
-        
-
 
         sample_size_u = resolution_u
         sample_size_v = resolution_v
@@ -821,7 +820,7 @@ def main():
     lr_schedule2 = torch.optim.lr_scheduler.ReduceLROnPlateau(opt2, patience=5, factor=0.1, verbose=True, min_lr=1e-5, 
                                                               eps=1e-08, threshold=1e-4, threshold_mode='rel', cooldown=0,)
     pbar = tqdm(range(num_epochs))
-    fig = plt.figure(figsize=(15, 9))
+    # fig = plt.figure(figsize=(15, 9))
     time1 = time.time()
     
     
@@ -898,11 +897,18 @@ def main():
                 # tgt_knn = tgt.permute(0, 2, 1)
                 input_ctrl_pts_knn = input_ctrl_pts_alter.permute(0, 2, 1)
 
+
+
                 if loss_type == 'chamfer':
+                    # if global loss
+                    # tgt = torch.stack(target_list)
+                    # out = out.reshape(1, sample_size_u*sample_size_v, 3)
+                    # # tgt = tgt.reshape(1, sample_size_u*sample_size_v, 3)
+                    # loss = chamfer_distance(out, tgt)
 
-                    loss += 0.9 * chamfer_distance_each_row(out, target_list) + 0.1 * lap 
+                    loss = 0.9 * chamfer_distance_each_row(out, target_list) + 0.1 * lap
 
-                    log_value('chamfer_distance', chamfer_distance_each_row(out, target_list), i)
+                    log_value('chamfer_distance', loss, i)
                     # log_value('laplacian_loss', lap * 10, i)
                     # log_value('close_loss_column', close_loss_column, i)
 
@@ -942,22 +948,7 @@ def main():
             ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
             ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
             ax2._axis3don = False
-            # ax.legend(loc='upper left')
-            # ax.set_xlabel('X')
-            # ax.set_ylabel('Y')
-            # ax.set_zlabel('Z')
-            # ax.set_zlim(-1,3)
-            # ax.set_xlim(-1,4)
-            # ax.set_ylim(-2,2)
-            # ax3 = fig.add_subplot(133, adjustable='box')
-            # # error_map = (((predicted - target_mpl) ** 2) / target_mpl).sum(-1)
-            # # # im3 = ax.imshow(error_map, cmap='jet', interpolation='none', extent=[0,128,0,128])
-            # # im3 = ax3.imshow(error_map, cmap='jet', interpolation='none', extent=[0, 128, 0, 128], vmin=-0.001,
-            # #                  vmax=0.001)
-            # # fig.colorbar(im3, shrink=0.4, aspect=5)
-            # fig.colorbar(im3, shrink=0.4, aspect=5, ticks=[-0.001, 0, 0.001])
-            # ax3.set_xlabel('$u$')
-            # ax3.set_ylabel('$v$')
+
 
             plt.show()
 
@@ -1056,41 +1047,8 @@ def main():
     # target_mpl = target_mpl.reshape(resolution_u, resolution_v, 3)
     predicted = predicted.reshape(sample_size_u, sample_size_v, 3)
     
-    # out_first_row = out_first_row.detach().cpu().numpy().squeeze(0).reshape(-1, sample_size_v, 3)
-    # ax5 = fig.add_subplot(155, projection='3d', adjustable='box', proj_type='ortho', aspect='equal')
-    # # error_map = (((predicted - target_mpl) ** 2) / target_mpl).sum(-1)
-    # ax5.plot_wireframe(out_first_row[:, :, 0], out_first_row[:, :, 1], out_first_row[:, :, 2], color='lightgreen', label='Predicted Surface')
-    # # im5 = ax5.imshow(error_map, cmap='jet', interpolation='none', extent=[0, 128, 0, 128], vmin=-0.001, vmax=0.001)
-    # adjust_plot(ax5)
-    # plt.show()
-    # error_map = (((predicted - target_mpl) ** 2) / target_mpl).sum(-1)
 
-    # im5 = ax5.imshow(error_map, cmap='jet', interpolation='none', extent=[0, 128, 0, 128], vmin=-0.001, vmax=0.001)
-    # fig.colorbar(im4, shrink=0.4, aspect=5)
-    # fig.colorbar(im5, shrink=0.4, aspect=5, ticks=[-0.001, 0, 0.001])
-    # ax5.set_xlabel('$u$')
-    # ax5.set_ylabel('$v$')
-    # x_positions = np.arange(0, 128, 20)  # pixel count at label position
-    # plt.xticks(x_positions, x_positions)
-    # plt.yticks(x_positions, x_positions)
-    # ax5.set_aspect(1)
-
-    # ax5 = fig.add_subplot(235, projection='3d', adjustable='box')
-    # plot_diff_subfigure(target_mpl - predicted, ax5)
-    #
-    # fig.subplots_adjust(hspace=0, wspace=0)
-    # fig.tight_layout()
-    # lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes[:]]
-    # lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
-
-    # finally we invoke the legend (that you probably would like to customize...)
-
-    # fig.legend(lines, labels, ncol=2, loc='lower left', bbox_to_anchor=(0.33, 0.0), )
-    # plt.savefig('ducky_reparameterization_no_ctrpts.pdf')
-    # plt.savefig(f'u_{object_name}_ctrpts_{ctr_pts}_eval_{resolution_u}x{resolution_v}_reconstruct_{out_dim}.pdf')
-    # plt.show()
-
-    with open(f'generated/{object_name}/trained_ctrpts_{ctr_pts}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.OFF', 'w') as f:
+    with open(f'generated/{object_name}/trained_ctrpts_{ctr_pts_u}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.OFF', 'w') as f:
         # Loop over the array rows
         f.write('OFF\n')
         f.write(str(out_dim_u * out_dim_v) + ' ' + '0 0\n')
@@ -1100,17 +1058,8 @@ def main():
                 line = str(out2[i, j, 0]) + ' ' + str(out2[i, j, 1]) + ' ' + str(out2[i, j, 2]) + '\n'
                 f.write(line)
                 
-    # with open(f'generated/u_{object_name}.cpt', 'w') as f:
 
-    #     for i in range(out_dim):
-    #         for j in range(out_dim):
-    #             # print(predicted_target[i, j, :])
-    #             line = str(out2[i, j, 0]) + ',' + str(out2[i, j, 1]) + ',' + str(out2[i, j, 2]) + ';'
-    #             f.write(line)
-    #             if (j == out_dim - 1):
-    #                 f.write('\n')
-
-    with open(f'generated/{object_name}/predicted_ctrpts_ctrpts_{ctr_pts}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.OFF', 'w') as f:
+    with open(f'generated/{object_name}/predicted_ctrpts_ctrpts_{ctr_pts_u}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.OFF', 'w') as f:
         # Loop over the array rows
         f.write('OFF\n')
         f.write(str(num_ctrl_pts1 * num_ctrl_pts2) + ' ' + '0 0\n')
@@ -1119,14 +1068,14 @@ def main():
                 line = str(predictedctrlpts[i, j, 0]) + ' ' + str(predictedctrlpts[i, j, 1]) + ' ' + str(predictedctrlpts[i, j, 2]) + '\n'
                 f.write(line)
                 
-    with open(f'generated/{object_name}/predicted_ctrpts_ctrpts_{ctr_pts}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.ctrlpts', 'w') as f:
+    with open(f'generated/{object_name}/predicted_ctrpts_ctrpts_{ctr_pts_u}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.ctrlpts', 'w') as f:
         # Loop over the array rows
         for i in range(num_ctrl_pts1):
             for j in range(num_ctrl_pts2):
                 line = str(predictedctrlpts[i, j, 0]) + ' ' + str(predictedctrlpts[i, j, 1]) + ' ' + str(predictedctrlpts[i, j, 2]) + '\n'
                 f.write(line)
                 
-    filename = f'generated/{object_name}/predicted_ctrpts_ctrpts_{ctr_pts}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.ctrlpts'
+    filename = f'generated/{object_name}/predicted_ctrpts_ctrpts_{ctr_pts_u}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.ctrlpts'
 
     reconstructed_mesh(object_name, filename, num_ctrl_pts1, num_ctrl_pts2, U, V)
     
