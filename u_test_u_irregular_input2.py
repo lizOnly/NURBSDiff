@@ -744,7 +744,9 @@ def read_irregular_file(path):
     return input_point_list, target_list, vertex_positions, resolution_u
 def main():
  
-    gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/luigi.obj"
+    gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/duck_clean.obj"
+    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_duck.txt'
+    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_duck_ctrpts.txt'
     # ctr_pts = 40
     # resolution_u = 64
     # resolution_v = 64
@@ -767,18 +769,20 @@ def main():
     
     out_dim_u = 200
     out_dim_v = 200
-    ctr_pts_u = 50
-    ctr_pts_v = 50
-    resolution_v = 500
+    ctr_pts_u = 16
+    ctr_pts_v = 16
+    resolution_v = 100
 
     w_lap = 0.1
-    mod_iter = 1100
+    mod_iter = 300
     
     # load point cloud
     max_coord = min_coord = 0
 
-    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi.txt'
+
     input_point_list, target_list, vertex_positions, resolution_u = read_irregular_file(cm_path)
+
+
 
     # range_coord = max(abs(min_coord), abs(max_coord))
     # range_coord = 1
@@ -798,6 +802,9 @@ def main():
     # inp_ctrl_pts[:, :, 1:, :].detach_()
     # inp_ctrl_pts = torch.nn.Parameter(torch.tensor(generate_cylinder(input_point_list, ctr_pts_u, ctr_pts_v, axis=axis, object_name=object_name), requires_grad=True).reshape(1, ctr_pts_u, ctr_pts_v,3).float().cuda())
 
+    # cp_input_point_list, cp_target_list, cp_vertex_positions, cp_resolution_u = read_irregular_file(ctr_pts_path)
+    # reshape cp_input_point_list to (1, cp_resolution_u, cp_resolution_u, 3)
+    # inp_ctrl_pts = torch.tensor(cp_input_point_list).float().cuda().reshape(1, cp_resolution_u, cp_resolution_u, 3)
 
     inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
     # Read control points from file
