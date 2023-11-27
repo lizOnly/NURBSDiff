@@ -707,9 +707,44 @@ def compute_edge_lengths(points, u, v):
 
     return average_distance
 
+def read_irregular_file(path):
+
+    input_point_list = []
+    target_list = []
+
+    with open(path, 'r') as f:
+        # with open('../../meshes/cube_cluster0_geodesic.txt', 'r') as f:
+        # with open('ex_ducky.off', 'r') as f:
+
+        lines = f.readlines()
+
+        # skip the first line
+
+        # lines = random.sample(lines, k=resolution * resolution)
+        # extract vertex positions
+
+        resolution_u = 0
+        vertex_positions = []
+
+        for line in lines:
+            if line.startswith('#'):
+                resolution_u += 1
+                if len(vertex_positions) > 0:
+                    target = torch.tensor(vertex_positions).float().cuda()
+                    target_list.append(target)
+                    vertex_positions = []
+
+            else:
+                x, y, z = map(float, line.split()[:3])
+                # min_coord = min(min_coord, x, y, z)
+                # max_coord = max(max_coord, x, y, z)
+                vertex_positions.append((x, y, z))
+                input_point_list.append((x, y, z))
+
+    return input_point_list, target_list, vertex_positions, resolution_u
 def main():
  
-    gt_path = "/mnt/Chest/Repositories/pygeodesics/data/duck_clean.obj"
+    gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/luigi.obj"
     # ctr_pts = 40
     # resolution_u = 64
     # resolution_v = 64
@@ -732,56 +767,27 @@ def main():
     
     out_dim_u = 200
     out_dim_v = 200
-    ctr_pts_u = 15
-    ctr_pts_v = 15
-    resolution_v = 100
+    ctr_pts_u = 50
+    ctr_pts_v = 50
+    resolution_v = 500
 
     w_lap = 0.1
-    mod_iter = 300
+    mod_iter = 1100
     
     # load point cloud
     max_coord = min_coord = 0
 
-    input_point_list = []
-    target_list = []
-    
-    with open('/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_duck.txt', 'r') as f:
-    # with open('../../meshes/cube_cluster0_geodesic.txt', 'r') as f:
-    # with open('ex_ducky.off', 'r') as f:
-    
-        lines = f.readlines()
+    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi.txt'
+    input_point_list, target_list, vertex_positions, resolution_u = read_irregular_file(cm_path)
 
-        # skip the first line
-        
-        # lines = random.sample(lines, k=resolution * resolution)
-        # extract vertex positions
-        
-        resolution_u = 0
-        vertex_positions = []
+    # range_coord = max(abs(min_coord), abs(max_coord))
+    # range_coord = 1
+    target = torch.tensor(vertex_positions).float().cuda()
+    print(target.shape)
+    target_list.append(target)
 
-        for line in lines:
-            if line.startswith('#'):
-                resolution_u += 1
-                if len(vertex_positions) > 0:
-                    target = torch.tensor(vertex_positions).float().cuda()
-                    target_list.append(target)
-                    vertex_positions = []
-                    
-            else:
-                x, y, z = map(float, line.split()[:3])
-                # min_coord = min(min_coord, x, y, z)
-                # max_coord = max(max_coord, x, y, z)
-                vertex_positions.append((x, y, z))
-                input_point_list.append((x, y, z))
-                
-        # range_coord = max(abs(min_coord), abs(max_coord))
-        # range_coord = 1
-        target = torch.tensor(vertex_positions).float().cuda()
-        print(target.shape)
-        target_list.append(target)
-
-        sample_size_u = resolution_u
-        sample_size_v = resolution_v
+    sample_size_u = resolution_u
+    sample_size_v = resolution_v
 
     
     num_ctrl_pts1 = ctr_pts_u
@@ -791,6 +797,8 @@ def main():
     # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=True).float().cuda()
     # inp_ctrl_pts[:, :, 1:, :].detach_()
     # inp_ctrl_pts = torch.nn.Parameter(torch.tensor(generate_cylinder(input_point_list, ctr_pts_u, ctr_pts_v, axis=axis, object_name=object_name), requires_grad=True).reshape(1, ctr_pts_u, ctr_pts_v,3).float().cuda())
+
+
     inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
     # Read control points from file
     # inp_ctrl_pts = torch.tensor(np.loadtxt(f'generated/{object_name}/control_points.txt')).reshape(1, ctr_pts_u, ctr_pts_v,3).float().cuda()
@@ -908,6 +916,12 @@ def main():
                     # out = out.reshape(1, sample_size_u*sample_size_v, 3)
                     # loss = chamfer_distance(out, tgt) + 0.1 * lap
 
+                    #decrease w_lap according to the epoch
+                    # if i < 600:
+                    #     w_lap = 0.1
+                    # else:
+                    #     w_lap = 0.1 * (1 - (i - 600)/600)
+
                     loss = (1-w_lap) * chamfer_distance_each_row(out, target_list) + w_lap * lap
 
                     log_value('chamfer_distance', loss, i)
@@ -919,6 +933,7 @@ def main():
 
 
         if i % 100 < 30:
+
             loss = opt1.step(closure)
             lr_schedule1.step(loss)
         else:
@@ -929,6 +944,7 @@ def main():
 
 
         if (i + 1) % mod_iter == 0:
+            print(w_lap)
             fig = plt.figure(figsize=(15, 4))
             predicted = out.detach().cpu().numpy().squeeze()
             # ctrlpts = inp_ctrl_pts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
