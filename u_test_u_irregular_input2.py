@@ -727,15 +727,17 @@ def main():
     current_time = get_current_time()
 
     configure("logs/tensorboard/{}".format(f'{object_name}_irregular_input/{current_time}'), flush_secs=2)
+
+    #ducky parameters
     
     out_dim_u = 200
     out_dim_v = 200
     ctr_pts_u = 15
     ctr_pts_v = 15
-
     resolution_v = 100
-    
 
+    w_lap = 0.1
+    mod_iter = 300
     
     # load point cloud
     max_coord = min_coord = 0
@@ -743,7 +745,7 @@ def main():
     input_point_list = []
     target_list = []
     
-    with open('/mnt/Chest/Repositories/NURBSDiff/data/cm_duck.txt', 'r') as f:
+    with open('/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_duck.txt', 'r') as f:
     # with open('../../meshes/cube_cluster0_geodesic.txt', 'r') as f:
     # with open('ex_ducky.off', 'r') as f:
     
@@ -906,7 +908,7 @@ def main():
                     # out = out.reshape(1, sample_size_u*sample_size_v, 3)
                     # loss = chamfer_distance(out, tgt) + 0.1 * lap
 
-                    loss = 0.9 * chamfer_distance_each_row(out, target_list) + 0.1 * lap
+                    loss = (1-w_lap) * chamfer_distance_each_row(out, target_list) + w_lap * lap
 
                     log_value('chamfer_distance', loss, i)
                     # log_value('laplacian_loss', lap * 10, i)
@@ -926,7 +928,7 @@ def main():
         out = layer((torch.cat((inp_ctrl_pts,weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
 
 
-        if (i + 1) % 300 == 0:
+        if (i + 1) % mod_iter == 0:
             fig = plt.figure(figsize=(15, 4))
             predicted = out.detach().cpu().numpy().squeeze()
             # ctrlpts = inp_ctrl_pts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
