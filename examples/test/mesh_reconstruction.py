@@ -34,7 +34,7 @@ def reconstructed_mesh(object_name, filename, num_ctrl_pts1, num_ctrl_pts2, u, v
     surf.knotvector_u = list(u)
     surf.knotvector_v = list(v)
 
-    surf.sample_size = 40
+    surf.sample_size = 100
     # surf.vis = vis.VisSurface()
     # operations.refine_knotvector(surf, [0, 1])
     

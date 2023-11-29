@@ -744,9 +744,9 @@ def read_irregular_file(path):
     return input_point_list, target_list, vertex_positions, resolution_u
 def main():
  
-    gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/luigi.obj"
-    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi.txt'
-    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_ctrpts.txt'
+    gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/brain.obj"
+    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain.txt'
+    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
     # ctr_pts = 40
     # resolution_u = 64
     # resolution_v = 64
@@ -774,7 +774,7 @@ def main():
     resolution_v = 100
 
     w_lap = 0.1
-    mod_iter = 100
+    mod_iter = 300
     
     # load point cloud
     max_coord = min_coord = 0
@@ -802,6 +802,17 @@ def main():
     # inp_ctrl_pts = torch.nn.Parameter(torch.tensor(generate_cylinder(input_point_list, ctr_pts_u, ctr_pts_v, axis=axis, object_name=object_name), requires_grad=True).reshape(1, ctr_pts_u, ctr_pts_v,3).float().cuda())
 
     cp_input_point_list, cp_target_list, cp_vertex_positions, cp_resolution_u = read_irregular_file(ctr_pts_path)
+
+    # #plot cp_input_point_list
+    #
+    # fig = plt.figure(figsize=(15, 9))
+    # ax = fig.add_subplot(111, projection='3d')
+    # ax.scatter(np.array(cp_input_point_list)[:, 0], np.array(cp_input_point_list)[:, 1], np.array(cp_input_point_list)[:, 2], c='r', marker='o')
+    # ax.set_xlabel('X Label')
+    # ax.set_ylabel('Y Label')
+    # ax.set_zlabel('Z Label')
+    # plt.show()
+
     # reshape cp_input_point_list to (1, cp_resolution_u, cp_resolution_u, 3)
     inp_ctrl_pts = torch.tensor(cp_input_point_list).float().cuda().reshape(1, cp_resolution_u, cp_resolution_u, 3)
     ctr_pts_u = cp_resolution_u
@@ -868,7 +879,7 @@ def main():
         knot_rep_q_1 = torch.zeros(1,q).cuda()
 
         with torch.no_grad():
-        #     # #rows
+            # #rows
             inp_ctrl_pts[:, 0, :, :] = inp_ctrl_pts[:, 0, :, :].mean(1)
             inp_ctrl_pts[:, -1, :, :] = inp_ctrl_pts[:, -1, :, :].mean(1)
             inp_ctrl_pts[:, :, 0, :] = inp_ctrl_pts[:, :, -3, :] = (inp_ctrl_pts[:, :, 0, :] + inp_ctrl_pts[:, :, -3, :]) / 2
@@ -920,11 +931,11 @@ def main():
 
 
                 if loss_type == 'chamfer':
-                    # # if global loss
-                    # tgt = torch.stack(target_list)
-                    # tgt = tgt.reshape(-1, 3).unsqueeze(0)
-                    # out = out.reshape(1, sample_size_u*sample_size_v, 3)
-                    # loss = chamfer_distance(out, tgt) + 0.1 * lap
+                    # if global loss
+                    tgt = torch.stack(target_list)
+                    tgt = tgt.reshape(-1, 3).unsqueeze(0)
+                    out = out.reshape(1, sample_size_u*sample_size_v, 3)
+                    loss = (1-w_lap) * chamfer_distance(out, tgt) + 0.1 * lap
 
                     #decrease w_lap according to the epoch
                     # if i < 600:
@@ -932,7 +943,7 @@ def main():
                     # else:
                     #     w_lap = 0.1 * (1 - (i - 600)/600)
 
-                    loss = (1-w_lap) * chamfer_distance_each_row(out, target_list) + w_lap * lap
+                    # loss = (1-w_lap) * chamfer_distance_each_row(out, target_list) + w_lap * lap
 
                     log_value('chamfer_distance', loss, i)
                     # log_value('laplacian_loss', lap * 10, i)
