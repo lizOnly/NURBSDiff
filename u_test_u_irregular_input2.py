@@ -935,7 +935,7 @@ def main():
                     tgt = torch.stack(target_list)
                     tgt = tgt.reshape(-1, 3).unsqueeze(0)
                     out = out.reshape(1, sample_size_u*sample_size_v, 3)
-                    loss = (1-w_lap) * chamfer_distance(out, tgt) + 0.1 * lap
+                    loss = (1-w_lap) * chamfer_distance(out, tgt) + w_lap * lap
 
                     #decrease w_lap according to the epoch
                     # if i < 600:
