@@ -744,9 +744,14 @@ def read_irregular_file(path):
     return input_point_list, target_list, vertex_positions, resolution_u
 def main():
  
-    gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/brain.obj"
-    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain.txt'
-    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
+    # gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/brain.obj"
+    # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain.txt'
+    # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
+
+    gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/luigi.obj"
+    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_0.15_10.txt'
+    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_0.1_10.txt'
+
     # ctr_pts = 40
     # resolution_u = 64
     # resolution_v = 64
@@ -773,8 +778,9 @@ def main():
     ctr_pts_v = 15
     resolution_v = 100
 
-    w_lap = 0.1
+    w_lap = 0
     mod_iter = 300
+    cglobal = 0
     
     # load point cloud
     max_coord = min_coord = 0
@@ -932,18 +938,21 @@ def main():
 
                 if loss_type == 'chamfer':
                     # if global loss
-                    tgt = torch.stack(target_list)
-                    tgt = tgt.reshape(-1, 3).unsqueeze(0)
-                    out = out.reshape(1, sample_size_u*sample_size_v, 3)
-                    loss = (1-w_lap) * chamfer_distance(out, tgt) + w_lap * lap
+
+                    if cglobal == True:
+                        loss = chamfer_distance(out_knn, input_ctrl_pts_knn)
+                        tgt = torch.stack(target_list)
+                        tgt = tgt.reshape(-1, 3).unsqueeze(0)
+                        out = out.reshape(1, sample_size_u*sample_size_v, 3)
+                        loss = (1-w_lap) * chamfer_distance(out, tgt) + w_lap * lap
 
                     #decrease w_lap according to the epoch
                     # if i < 600:
                     #     w_lap = 0.1
                     # else:
                     #     w_lap = 0.1 * (1 - (i - 600)/600)
-
-                    # loss = (1-w_lap) * chamfer_distance_each_row(out, target_list) + w_lap * lap
+                    else:
+                        loss = (1-w_lap) * chamfer_distance_each_row(out, target_list) + w_lap * lap
 
                     log_value('chamfer_distance', loss, i)
                     # log_value('laplacian_loss', lap * 10, i)
