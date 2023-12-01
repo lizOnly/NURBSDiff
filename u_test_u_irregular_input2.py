@@ -749,8 +749,12 @@ def main():
     # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
 
     gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/luigi.obj"
-    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_0.15_10.txt'
-    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_0.1_10.txt'
+    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_0.15_20.txt'
+    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_0.1_20.txt'
+
+    # gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/duck_clean.obj"
+    # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_duck.txt'
+    # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_duck_ctrpts.txt'
 
     # ctr_pts = 40
     # resolution_u = 64
@@ -776,22 +780,20 @@ def main():
     out_dim_v = 200
     ctr_pts_u = 15
     ctr_pts_v = 15
-    resolution_v = 100
+    resolution_v = 500
 
-    w_lap = 0
-    mod_iter = 300
+    w_lap = 0.1
+    mod_iter = 1000
     cglobal = 0
     
     # load point cloud
     max_coord = min_coord = 0
 
 
+
+
     input_point_list, target_list, vertex_positions, resolution_u = read_irregular_file(cm_path)
 
-
-
-    # range_coord = max(abs(min_coord), abs(max_coord))
-    # range_coord = 1
     target = torch.tensor(vertex_positions).float().cuda()
     print(target.shape)
     target_list.append(target)
@@ -1125,6 +1127,9 @@ def main():
                 
     filename = f'generated/{object_name}/predicted_ctrpts_ctrpts_{ctr_pts_u}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.ctrlpts'
 
+    # force the last 4 elements of and V to be 1
+    U[-4:] = 1
+    V[-4:] = 1
     reconstructed_mesh(object_name, filename, num_ctrl_pts1, num_ctrl_pts2, U, V)
     
     pass
