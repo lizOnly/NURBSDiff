@@ -776,14 +776,14 @@ def main():
 
     #ducky parameters
     
-    out_dim_u = 200
-    out_dim_v = 200
+    out_dim_u = 250
+    out_dim_v = 250
     ctr_pts_u = 15
     ctr_pts_v = 15
-    resolution_v = 200
+    resolution_v = 100
 
     w_lap = 0.1
-    mod_iter = 1000
+    mod_iter = 2000
     cglobal = 0
     
     # load point cloud
@@ -1098,7 +1098,7 @@ def main():
     predicted = predicted.reshape(sample_size_u, sample_size_v, 3)
     
 
-    with open(f'generated/{object_name}/points_{ctr_pts_u}_{out_dim_u}x{out_dim_v}.OFF', 'w') as f:
+    with open(f'generated/{object_name}/points_{ctr_pts_u}_{out_dim_u}x{out_dim_v}_{resolution_v}.OFF', 'w') as f:
         # Loop over the array rows
         f.write('OFF\n')
         f.write(str(out_dim_u * out_dim_v) + ' ' + '0 0\n')
@@ -1109,7 +1109,7 @@ def main():
                 f.write(line)
                 
 
-    with open(f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}.OFF', 'w') as f:
+    with open(f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}.OFF', 'w') as f:
         # Loop over the array rows
         f.write('OFF\n')
         f.write(str(num_ctrl_pts1 * num_ctrl_pts2) + ' ' + '0 0\n')
@@ -1118,7 +1118,7 @@ def main():
                 line = str(predictedctrlpts[i, j, 0]) + ' ' + str(predictedctrlpts[i, j, 1]) + ' ' + str(predictedctrlpts[i, j, 2]) + '\n'
                 f.write(line)
                 
-    with open(f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}', 'w') as f:
+    with open(f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}', 'w') as f:
         # Loop over the array rows
         for i in range(num_ctrl_pts1):
             for j in range(num_ctrl_pts2):
@@ -1126,15 +1126,15 @@ def main():
                 f.write(line)
 
     #write U and V in a file
-    np.save(f'generated/{object_name}/U_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}', U)
-    np.save(f'generated/{object_name}/V_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}', V)
+    np.save(f'generated/{object_name}/U_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}', U)
+    np.save(f'generated/{object_name}/V_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}', V)
 
 
                 
-    filename_ctrpts = f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}'
+    filename_ctrpts = f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}'
 
-    U = np.load(f'generated/{object_name}/U_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}.npy')
-    V = np.load(f'generated/{object_name}/V_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}.npy')
+    U = np.load(f'generated/{object_name}/U_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}.npy')
+    V = np.load(f'generated/{object_name}/V_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}.npy')
 
     # force the last 4 elements of and V to be 1
     U[-4:] = 1
