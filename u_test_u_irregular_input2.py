@@ -749,8 +749,8 @@ def main():
     # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
 
     gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/luigi.obj"
-    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_0.15_20.txt'
-    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_0.1_20.txt'
+    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi.txt'
+    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_ctrpts.txt'
 
     # gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/duck_clean.obj"
     # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_duck.txt'
@@ -780,7 +780,7 @@ def main():
     out_dim_v = 200
     ctr_pts_u = 15
     ctr_pts_v = 15
-    resolution_v = 500
+    resolution_v = 200
 
     w_lap = 0.1
     mod_iter = 1000
@@ -1098,7 +1098,7 @@ def main():
     predicted = predicted.reshape(sample_size_u, sample_size_v, 3)
     
 
-    with open(f'generated/{object_name}/trained_ctrpts_{ctr_pts_u}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.OFF', 'w') as f:
+    with open(f'generated/{object_name}/points_{ctr_pts_u}_{out_dim_u}x{out_dim_v}.OFF', 'w') as f:
         # Loop over the array rows
         f.write('OFF\n')
         f.write(str(out_dim_u * out_dim_v) + ' ' + '0 0\n')
@@ -1109,7 +1109,7 @@ def main():
                 f.write(line)
                 
 
-    with open(f'generated/{object_name}/predicted_ctrpts_ctrpts_{ctr_pts_u}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.OFF', 'w') as f:
+    with open(f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}.OFF', 'w') as f:
         # Loop over the array rows
         f.write('OFF\n')
         f.write(str(num_ctrl_pts1 * num_ctrl_pts2) + ' ' + '0 0\n')
@@ -1118,19 +1118,28 @@ def main():
                 line = str(predictedctrlpts[i, j, 0]) + ' ' + str(predictedctrlpts[i, j, 1]) + ' ' + str(predictedctrlpts[i, j, 2]) + '\n'
                 f.write(line)
                 
-    with open(f'generated/{object_name}/predicted_ctrpts_ctrpts_{ctr_pts_u}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.ctrlpts', 'w') as f:
+    with open(f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}', 'w') as f:
         # Loop over the array rows
         for i in range(num_ctrl_pts1):
             for j in range(num_ctrl_pts2):
                 line = str(predictedctrlpts[i, j, 0]) + ' ' + str(predictedctrlpts[i, j, 1]) + ' ' + str(predictedctrlpts[i, j, 2]) + '\n'
                 f.write(line)
+
+    #write U and V in a file
+    np.save(f'generated/{object_name}/U_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}', U)
+    np.save(f'generated/{object_name}/V_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}', V)
+
+
                 
-    filename = f'generated/{object_name}/predicted_ctrpts_ctrpts_{ctr_pts_u}_eval_irregular_reconstruct_{out_dim_u}x{out_dim_v}_{axis}.ctrlpts'
+    filename_ctrpts = f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}'
+
+    U = np.load(f'generated/{object_name}/U_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}.npy')
+    V = np.load(f'generated/{object_name}/V_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}.npy')
 
     # force the last 4 elements of and V to be 1
     U[-4:] = 1
     V[-4:] = 1
-    reconstructed_mesh(object_name, filename, num_ctrl_pts1, num_ctrl_pts2, U, V)
+    reconstructed_mesh(object_name, filename_ctrpts, num_ctrl_pts1, num_ctrl_pts2, U, V)
     
     pass
 

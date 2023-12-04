@@ -41,7 +41,7 @@ def reconstructed_mesh(object_name, filename, num_ctrl_pts1, num_ctrl_pts2, u, v
     surf.render()
 
     # save the object
-    exchange.export_obj(surf, f"generated/{object_name}/mesh.obj")
+    exchange.export_obj(surf, filename + "_mesh.obj")
 
     pass
 
