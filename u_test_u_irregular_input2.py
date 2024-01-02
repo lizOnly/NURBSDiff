@@ -749,8 +749,8 @@ def main():
     # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
 
     gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/luigi.obj"
-    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi.txt'
-    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_ctrpts.txt'
+    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_0.025_20.txt'
+    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_uniform_nowarp_0.003_10.txt'
 
     # gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/duck_clean.obj"
     # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_duck.txt'
@@ -783,7 +783,7 @@ def main():
     resolution_v = 100
 
     w_lap = 0.1
-    mod_iter = 2000
+    mod_iter = 1000
     cglobal = 0
     
     # load point cloud
@@ -793,6 +793,8 @@ def main():
 
 
     input_point_list, target_list, vertex_positions, resolution_u = read_irregular_file(cm_path)
+
+    print("#input points " + str(len(input_point_list)))
 
     target = torch.tensor(vertex_positions).float().cuda()
     print(target.shape)
@@ -804,22 +806,10 @@ def main():
     
 
     num_eval_pts_u = resolution_u
-    # num_eval_pts_v = resolution_v
-    # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=True).float().cuda()
-    # inp_ctrl_pts[:, :, 1:, :].detach_()
-    # inp_ctrl_pts = torch.nn.Parameter(torch.tensor(generate_cylinder(input_point_list, ctr_pts_u, ctr_pts_v, axis=axis, object_name=object_name), requires_grad=True).reshape(1, ctr_pts_u, ctr_pts_v,3).float().cuda())
 
     cp_input_point_list, cp_target_list, cp_vertex_positions, cp_resolution_u = read_irregular_file(ctr_pts_path)
 
-    # #plot cp_input_point_list
-    #
-    # fig = plt.figure(figsize=(15, 9))
-    # ax = fig.add_subplot(111, projection='3d')
-    # ax.scatter(np.array(cp_input_point_list)[:, 0], np.array(cp_input_point_list)[:, 1], np.array(cp_input_point_list)[:, 2], c='r', marker='o')
-    # ax.set_xlabel('X Label')
-    # ax.set_ylabel('Y Label')
-    # ax.set_zlabel('Z Label')
-    # plt.show()
+    print("#input control points " + str(len(cp_input_point_list)))
 
     # reshape cp_input_point_list to (1, cp_resolution_u, cp_resolution_u, 3)
     inp_ctrl_pts = torch.tensor(cp_input_point_list).float().cuda().reshape(1, cp_resolution_u, cp_resolution_u, 3)
@@ -829,9 +819,6 @@ def main():
     num_ctrl_pts1 = ctr_pts_u
     num_ctrl_pts2 = ctr_pts_v
 
-    # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
-
-    # inp_ctrl_pts[:, :10, :, :].detach()
     inp_ctrl_pts.requires_grad = True
     # inp_ctrl_pts = torch.cat((inp_ctrl_pts_first_row, inp_ctrl_pts_rest_rows), dim=2).float().cuda()
     # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=True).float().cuda()
@@ -869,7 +856,7 @@ def main():
     knot_rep_q_1 = torch.zeros(1,q).cuda()
     beforeTrained = layer((torch.cat((inp_ctrl_pts,weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))[0].detach().cpu().numpy().squeeze()
     
-    with open(f'generated/{object_name}/before_trained.OFF', 'w') as f:
+    with open(f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}_before_trained.OFF', 'w') as f:
        # Loop over the array rows
         f.write('OFF\n')
         f.write(str(sample_size_u * sample_size_v) + ' ' + '0 0\n')
