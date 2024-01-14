@@ -748,13 +748,17 @@ def main():
     # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain.txt'
     # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
 
-    gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/luigi.obj"
-    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_0.025_20.txt'
-    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_luigi_uniform_nowarp_0.003_10.txt'
+    # gt_path = "/mnt/Chest/Repositories/NURBSDiff/data/luigi.obj"
+    # cm_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_0.025_20.txt'
+    # ctr_pts_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_uniform_warp_offset_0.003_20.txt'
 
-    # gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/duck_clean.obj"
-    # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_duck.txt'
-    # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_duck_ctrpts.txt'
+    # gt_path = "/mnt/Chest/Repositories/pygeodesics/data/duck_clean.obj"
+    # cm_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_duck_50.txt'
+    # ctr_pts_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_duck_20.txt'
+
+    gt_path = "/mnt/Chest/Repositories/pygeodesics/data/sphere.obj"
+    cm_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_sphere_20.txt'
+    ctr_pts_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_sphere_20.txt'
 
     # ctr_pts = 40
     # resolution_u = 64
@@ -780,11 +784,11 @@ def main():
     out_dim_v = 250
     ctr_pts_u = 15
     ctr_pts_v = 15
-    resolution_v = 100
+    resolution_v = 50
 
     w_lap = 0.1
-    mod_iter = 1000
-    cglobal = 0
+    mod_iter = 1
+    cglobal = 1
     
     # load point cloud
     max_coord = min_coord = 0
@@ -902,26 +906,26 @@ def main():
 
             if ignore_uv:
                 lap = laplacian_loss_unsupervised(inp_ctrl_pts)
-                lap2 = laplacian_loss_unsupervised(out)
+                # lap2 = laplacian_loss_unsupervised(out)
                 # lap3 = 0.00 * laplacian_loss_splinenet(out, target)
                 edges_loss = 0.10 * compute_edge_lengths(inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2)
                 # compute dif between first column and last column  of control points
                 input_ctrl_pts_alter = inp_ctrl_pts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
-                close_loss_single_column = torch.norm(input_ctrl_pts_alter[:, 0, :] - input_ctrl_pts_alter[:, -1, :])
+                # close_loss_single_column = torch.norm(input_ctrl_pts_alter[:, 0, :] - input_ctrl_pts_alter[:, -1, :])
 
 
-                close_loss_column =  (
-                                            torch.norm(input_ctrl_pts_alter[:, 0, :] - input_ctrl_pts_alter[:, -3, :]) +
-                                            torch.norm(input_ctrl_pts_alter[:, 1, :] - input_ctrl_pts_alter[:, -2, :]) +
-                                            torch.norm(input_ctrl_pts_alter[:, 2, :] - input_ctrl_pts_alter[:, -1, :])
-                                        )
-                close_loss_row =  torch.norm(input_ctrl_pts_alter[0, :, :] - input_ctrl_pts_alter[-1, :, :])
+                # close_loss_column =  (
+                #                             torch.norm(input_ctrl_pts_alter[:, 0, :] - input_ctrl_pts_alter[:, -3, :]) +
+                #                             torch.norm(input_ctrl_pts_alter[:, 1, :] - input_ctrl_pts_alter[:, -2, :]) +
+                #                             torch.norm(input_ctrl_pts_alter[:, 2, :] - input_ctrl_pts_alter[:, -1, :])
+                #                         )
+                # close_loss_row =  torch.norm(input_ctrl_pts_alter[0, :, :] - input_ctrl_pts_alter[-1, :, :])
                 # lap2 = 0.001 * laplacian_loss_splinenet(out, target)
                 out = out.reshape(sample_size_u, sample_size_v, 3)
                 # tgt = target.reshape(sample_size_u, sample_size_v, 3)
-                out_knn = out.permute(0, 2, 1)
+                # out_knn = out.permute(0, 2, 1)
                 # tgt_knn = tgt.permute(0, 2, 1)
-                input_ctrl_pts_knn = input_ctrl_pts_alter.permute(0, 2, 1)
+                # input_ctrl_pts_knn = input_ctrl_pts_alter.permute(0, 2, 1)
 
 
 
@@ -929,10 +933,20 @@ def main():
                     # if global loss
 
                     if cglobal == True:
-                        loss = chamfer_distance(out_knn, input_ctrl_pts_knn)
+                        # loss = chamfer_distance(out_knn, input_ctrl_pts_knn)
                         tgt = torch.stack(target_list)
                         tgt = tgt.reshape(-1, 3).unsqueeze(0)
                         out = out.reshape(1, sample_size_u*sample_size_v, 3)
+
+                        #copy tgt to host
+                        tgt_cpu = tgt.detach().cpu().numpy().squeeze()
+                        out_cpu = out.detach().cpu().numpy().squeeze()
+                        #visualize tgt and out
+                        fig = plt.figure()
+                        ax = fig.add_subplot( projection='3d')
+                        ax.scatter(tgt_cpu[:, 0], tgt_cpu[:, 1], tgt_cpu[:, 2], c='r', marker='o')
+                        ax.scatter(out_cpu[:, 0], out_cpu[:, 1], out_cpu[:, 2], c='b', marker='o')
+                        plt.show()
                         loss = (1-w_lap) * chamfer_distance(out, tgt) + w_lap * lap
 
                     #decrease w_lap according to the epoch
@@ -964,13 +978,13 @@ def main():
 
         if (i + 1) % mod_iter == 0:
             print(w_lap)
-            fig = plt.figure(figsize=(15, 4))
+            fig = plt.figure()
             predicted = out.detach().cpu().numpy().squeeze()
             # ctrlpts = inp_ctrl_pts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
             predctrlpts = inp_ctrl_pts.detach().cpu().numpy().squeeze()
             predctrlptsctrlpts = predctrlpts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
 
-            ax2 = fig.add_subplot(132, projection='3d', adjustable='box')
+            ax2 = fig.add_subplot( projection='3d')
             surf2 = ax2.plot_wireframe(predicted[:, :, 0], predicted[:, :, 1], predicted[:, :, 2], color='green',
                                        label='Predicted Surface')
             surf2 = ax2.plot_wireframe(predctrlpts[:, :, 0], predctrlpts[:, :, 1], predctrlpts[:, :, 2],
