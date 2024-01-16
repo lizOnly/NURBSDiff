@@ -752,13 +752,13 @@ def main():
     # cm_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_0.025_20.txt'
     # ctr_pts_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_uniform_warp_offset_0.003_20.txt'
 
-    # gt_path = "/mnt/Chest/Repositories/pygeodesics/data/duck_clean.obj"
-    # cm_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_duck_50.txt'
-    # ctr_pts_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_duck_20.txt'
+    # gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/duck_clean.obj"
+    # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_ducky_0.003_50.txt'
+    # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_ducky_0.003_20.txt'
 
-    gt_path = "/mnt/Chest/Repositories/pygeodesics/data/sphere.obj"
-    cm_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_sphere_20.txt'
-    ctr_pts_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_sphere_20.txt'
+    gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/sphere.obj"
+    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_sphere_uniform_pts_0.003_50.txt'
+    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_sphere_off_2_0.003_20.txt'
 
     # ctr_pts = 40
     # resolution_u = 64
@@ -786,9 +786,14 @@ def main():
     ctr_pts_v = 15
     resolution_v = 50
 
-    w_lap = 0.1
-    mod_iter = 1
+    w_lap = 0.8
+    mod_iter = 1000
     cglobal = 1
+    average = 1
+    learning_rate = 0.5
+
+    #best
+    learning_rate = 0.15
     
     # load point cloud
     max_coord = min_coord = 0
@@ -817,6 +822,7 @@ def main():
 
     # reshape cp_input_point_list to (1, cp_resolution_u, cp_resolution_u, 3)
     inp_ctrl_pts = torch.tensor(cp_input_point_list).float().cuda().reshape(1, cp_resolution_u, cp_resolution_u, 3)
+
     ctr_pts_u = cp_resolution_u
     ctr_pts_v = cp_resolution_u
 
@@ -842,7 +848,7 @@ def main():
     # print(target.shape)
     layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=sample_size_u, out_dim_v=sample_size_v, method='tc', dvc='cuda').cuda()
     
-    opt1 = torch.optim.Adam(iter([inp_ctrl_pts, weights]), lr=0.5)
+    opt1 = torch.optim.Adam(iter([inp_ctrl_pts, weights]), lr=learning_rate)
     opt2 = torch.optim.Adam(iter([knot_int_u, knot_int_v]), lr=1e-2)
     lr_schedule1 = torch.optim.lr_scheduler.ReduceLROnPlateau(opt1, patience=10, factor=0.1, verbose=True, min_lr=1e-5,
                                                               eps=1e-08, threshold=1e-4, threshold_mode='rel', cooldown=0,
@@ -879,11 +885,12 @@ def main():
 
         with torch.no_grad():
             # #rows
-            inp_ctrl_pts[:, 0, :, :] = inp_ctrl_pts[:, 0, :, :].mean(1)
-            inp_ctrl_pts[:, -1, :, :] = inp_ctrl_pts[:, -1, :, :].mean(1)
-            inp_ctrl_pts[:, :, 0, :] = inp_ctrl_pts[:, :, -3, :] = (inp_ctrl_pts[:, :, 0, :] + inp_ctrl_pts[:, :, -3, :]) / 2
-            inp_ctrl_pts[:, :, 1, :] = inp_ctrl_pts[:, :, -2, :] = (inp_ctrl_pts[:, :, 1, :] + inp_ctrl_pts[:, :, -2, :]) / 2
-            inp_ctrl_pts[:, :, 2, :] = inp_ctrl_pts[:, :, -1, :] = (inp_ctrl_pts[:, :, 2, :] + inp_ctrl_pts[:, :, -1, :]) / 2
+            if average > 0:
+                inp_ctrl_pts[:, 0, :, :] = inp_ctrl_pts[:, 0, :, :].mean(1)
+                inp_ctrl_pts[:, -1, :, :] = inp_ctrl_pts[:, -1, :, :].mean(1)
+                inp_ctrl_pts[:, :, 0, :] = inp_ctrl_pts[:, :, -3, :] = (inp_ctrl_pts[:, :, 0, :] + inp_ctrl_pts[:, :, -3, :]) / 2
+                inp_ctrl_pts[:, :, 1, :] = inp_ctrl_pts[:, :, -2, :] = (inp_ctrl_pts[:, :, 1, :] + inp_ctrl_pts[:, :, -2, :]) / 2
+                inp_ctrl_pts[:, :, 2, :] = inp_ctrl_pts[:, :, -1, :] = (inp_ctrl_pts[:, :, 2, :] + inp_ctrl_pts[:, :, -1, :]) / 2
 
             pass
         
@@ -938,15 +945,16 @@ def main():
                         tgt = tgt.reshape(-1, 3).unsqueeze(0)
                         out = out.reshape(1, sample_size_u*sample_size_v, 3)
 
-                        #copy tgt to host
-                        tgt_cpu = tgt.detach().cpu().numpy().squeeze()
-                        out_cpu = out.detach().cpu().numpy().squeeze()
-                        #visualize tgt and out
-                        fig = plt.figure()
-                        ax = fig.add_subplot( projection='3d')
-                        ax.scatter(tgt_cpu[:, 0], tgt_cpu[:, 1], tgt_cpu[:, 2], c='r', marker='o')
-                        ax.scatter(out_cpu[:, 0], out_cpu[:, 1], out_cpu[:, 2], c='b', marker='o')
-                        plt.show()
+                        if (i + 1) % mod_iter == 0:
+                            #copy tgt to host
+                            tgt_cpu = tgt.detach().cpu().numpy().squeeze()
+                            out_cpu = out.detach().cpu().numpy().squeeze()
+                            #visualize tgt and out
+                            fig = plt.figure()
+                            ax = fig.add_subplot( projection='3d')
+                            ax.scatter(tgt_cpu[:, 0], tgt_cpu[:, 1], tgt_cpu[:, 2], c='r', marker='o')
+                            ax.scatter(out_cpu[:, 0], out_cpu[:, 1], out_cpu[:, 2], c='b', marker='o')
+                            plt.show()
                         loss = (1-w_lap) * chamfer_distance(out, tgt) + w_lap * lap
 
                     #decrease w_lap according to the epoch
@@ -977,7 +985,6 @@ def main():
 
 
         if (i + 1) % mod_iter == 0:
-            print(w_lap)
             fig = plt.figure()
             predicted = out.detach().cpu().numpy().squeeze()
             # ctrlpts = inp_ctrl_pts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
