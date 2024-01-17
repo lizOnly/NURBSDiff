@@ -2,6 +2,7 @@ import math
 import time
 import torch
 import numpy as np
+import os
 
 #from DuckyFittingOriginal import read_weights
 # from examples.splinenet import DGCNNControlPoints, get_graph_feature
@@ -451,29 +452,6 @@ def laplacian_loss_splinenet(output, gt, dist_type="l2"):
     dist = torch.mean(dist)
     return dist
 
-# def laplacian_loss_unsupervised(output, dist_type="l2"):
-#     filter = ([[[0.0, 0.25, 0.0], [0.25, -1.0, 0.25], [0.0, 0.25, 0.0]],
-#                [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-#                [[0, 0, 0], [0, 0, 0], [0, 0, 0]]])
-
-#     filter = np.stack([filter, np.roll(filter, 1, 0), np.roll(filter, 2, 0)])
-
-#     filter = -np.array(filter, dtype=np.float32)
-#     filter = Variable(torch.from_numpy(filter)).cuda()
-#     # print(output.shape)
-#     laplacian_output = F.conv2d(output.permute(0, 3, 1, 2), filter, padding=1)
-#     # print(laplacian_output.shape)
-
-#     if dist_type == "l2":
-#         dist = torch.sum((laplacian_output) ** 2, 1) 
-
-#         # dist = torch.sum((laplacian_output) ** 2, (1,2,3)) + torch.sum((laplacian_input)**2,(1,2,3))
-#     elif dist_type == "l1":
-#         dist = torch.abs(torch.sum(laplacian_output.mean(),1))
-#     dist = torch.mean(dist)
-
-#     return dist
-
 def laplacian_loss_unsupervised(output, dist_type="l2"):
     filter = ([[[0.0, 0.25, 0.0], [0.25, -1.0, 0.25], [0.0, 0.25, 0.0]],
                [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
@@ -538,26 +516,6 @@ def laplacian_loss(output, gt, dist_type="l2"):
     dist = torch.mean(dist)
     return abs(dist)
 
-# def laplacian_loss_unsupervised(output, dist_type="l2"):
-#     filter = torch.tensor([[[0.0, 0.25, 0.0], [0.25, -1.0, 0.25], [0.0, 0.25, 0.0]],
-#                            [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-#                            [[0, 0, 0], [0, 0, 0], [0, 0, 0]]], dtype=torch.float32)
-
-#     filter = -torch.stack([filter, torch.roll(filter, 1, 0), torch.roll(filter, 2, 0)])
-
-#     # filter = -filter
-#     # filter = filter.to(output.device)
-
-#     laplacian_output = F.conv2d(output.permute(0, 3, 1, 2), filter, padding=1)
-
-#     if dist_type == "l2":
-#         dist = torch.sum((laplacian_output) ** 2, (1,2,3)) 
-#         # dist = torch.sum((laplacian_output) ** 2, (1,2,3)) + torch.sum((laplacian_input)**2,(1,2,3))
-#     elif dist_type == "l1":
-#         dist = torch.abs(torch.sum(laplacian_output.mean(),1))
-#     dist = torch.mean(dist)
-
-#     return dist
 
 def hausdorff_distance(pred, gt):
     """
@@ -743,7 +701,13 @@ def read_irregular_file(path):
 
     return input_point_list, target_list, vertex_positions, resolution_u
 def main():
- 
+
+    gt_path = os.path.dirname(os.path.realpath(__file__))
+    gt_path = gt_path.split("/")[0:-1]
+    gt_path = "/".join(gt_path)
+
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+
     # gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/brain.obj"
     # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain.txt'
     # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
@@ -756,9 +720,9 @@ def main():
     # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_ducky_0.003_50.txt'
     # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_ducky_0.003_20.txt'
 
-    gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/sphere.obj"
-    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_sphere_uniform_pts_0.003_50.txt'
-    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_sphere_off_2_0.003_20.txt'
+    gt_path = gt_path + "/pygeodesics/data/sphere.obj"
+    cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
+    ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
 
     # ctr_pts = 40
     # resolution_u = 64
@@ -830,12 +794,12 @@ def main():
     num_ctrl_pts2 = ctr_pts_v
 
     inp_ctrl_pts.requires_grad = True
-    # inp_ctrl_pts = torch.cat((inp_ctrl_pts_first_row, inp_ctrl_pts_rest_rows), dim=2).float().cuda()
-    # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=True).float().cuda()
     # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
     knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 - p).unsqueeze(0).cuda(), requires_grad=True)
+    # knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 + p - 1).unsqueeze(0).cuda(), requires_grad=True)
     # knot_int_u = torch.nn.Parameter(torch.cat((torch.ones(num_ctrl_pts1 - p - 3), torch.zeros(3)), dim=0).unsqueeze(0).cuda(), requires_grad=True)
     knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2 - q).unsqueeze(0).cuda(), requires_grad=True)
+    # knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2 + q - 1).unsqueeze(0).cuda(), requires_grad=True)
     # knot_int_v = torch.nn.Parameter(torch.cat((torch.ones(num_ctrl_pts2 - q - 1), torch.zeros(1)), dim=0).unsqueeze(0).cuda(), requires_grad=True)
     # knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1+p+1-2*p-1).unsqueeze(0).cuda(), requires_grad=True)
     # knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2+q+1-2*q-1).unsqueeze(0).cuda(), requires_grad=True)
@@ -904,35 +868,13 @@ def main():
 
             out = layer((torch.cat((inp_ctrl_pts,weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
 
-            # if i < 600:
             loss = 0
-            # else:
-                # loss  = 4 * non_descending_loss(knot_int_u) + 4 * non_descending_loss(knot_int_v)
-            # loss += 0.001 * laplacian_loss(out, target)
            
 
             if ignore_uv:
                 lap = laplacian_loss_unsupervised(inp_ctrl_pts)
-                # lap2 = laplacian_loss_unsupervised(out)
-                # lap3 = 0.00 * laplacian_loss_splinenet(out, target)
-                edges_loss = 0.10 * compute_edge_lengths(inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2)
-                # compute dif between first column and last column  of control points
-                input_ctrl_pts_alter = inp_ctrl_pts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
-                # close_loss_single_column = torch.norm(input_ctrl_pts_alter[:, 0, :] - input_ctrl_pts_alter[:, -1, :])
-
-
-                # close_loss_column =  (
-                #                             torch.norm(input_ctrl_pts_alter[:, 0, :] - input_ctrl_pts_alter[:, -3, :]) +
-                #                             torch.norm(input_ctrl_pts_alter[:, 1, :] - input_ctrl_pts_alter[:, -2, :]) +
-                #                             torch.norm(input_ctrl_pts_alter[:, 2, :] - input_ctrl_pts_alter[:, -1, :])
-                #                         )
-                # close_loss_row =  torch.norm(input_ctrl_pts_alter[0, :, :] - input_ctrl_pts_alter[-1, :, :])
-                # lap2 = 0.001 * laplacian_loss_splinenet(out, target)
                 out = out.reshape(sample_size_u, sample_size_v, 3)
-                # tgt = target.reshape(sample_size_u, sample_size_v, 3)
-                # out_knn = out.permute(0, 2, 1)
-                # tgt_knn = tgt.permute(0, 2, 1)
-                # input_ctrl_pts_knn = input_ctrl_pts_alter.permute(0, 2, 1)
+
 
 
 
@@ -989,7 +931,7 @@ def main():
             predicted = out.detach().cpu().numpy().squeeze()
             # ctrlpts = inp_ctrl_pts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
             predctrlpts = inp_ctrl_pts.detach().cpu().numpy().squeeze()
-            predctrlptsctrlpts = predctrlpts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
+            # predctrlptsctrlpts = predctrlpts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
 
             ax2 = fig.add_subplot( projection='3d')
             surf2 = ax2.plot_wireframe(predicted[:, :, 0], predicted[:, :, 1], predicted[:, :, 2], color='green',
@@ -1086,17 +1028,7 @@ def main():
     knot_rep_p_1 = torch.zeros(1,p).cuda()
     knot_rep_q_0 = torch.zeros(1,q+1).cuda()
     knot_rep_q_1 = torch.zeros(1,q).cuda()
-    # Extract the first layer of the tensor
-    first_layer_int = inp_ctrl_pts[:, 0, :, :]
-    first_layer_weights = weights[:, 0, :, :]
-    # Replicate the first layer to match the desired size
-    # extended_inp_ctrl_pts = torch.cat((first_layer_int.unsqueeze(1), inp_ctrl_pts), dim=1)
-    # first_column_int = extended_inp_ctrl_pts[:, :, 0, :]
-    # extended_inp_ctrl_pts = torch.cat((first_column_int.unsqueeze(2), extended_inp_ctrl_pts), dim=2)
-    # extended_weights = torch.cat((first_layer_weights.unsqueeze(1), weights), dim=1)
-    # first_column_weights = extended_weights[:, :, 0, :]
-    # extended_weights = torch.cat((first_column_weights.unsqueeze(2), extended_weights), dim=2)
-    # print(extended_inp_ctrl_pts.shape)
+
     out2 = layer((torch.cat((inp_ctrl_pts, weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
     out2 = out2.detach().cpu().numpy().squeeze(0).reshape(out_dim_u, out_dim_v, 3)
     # ax4.plot_wireframe(out2[:, :, 0], out2[:, :, 1], out2[:, :, 2], color='cyan', label='Reconstructed Surface')
