@@ -16,7 +16,11 @@ from NURBSDiff.nurbs_eval import SurfEval
 from NURBSDiff.surf_eval import SurfEval as SurfEvalBS
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+import matplotlib
 from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D
+
 from geomdl import exchange, utilities
 # from geomdl.visualization import VisMPL
 from geomdl import compatibility
@@ -731,7 +735,7 @@ def main():
     
     object_name = gt_path.split("/")[-1].split(".")[0]
     
-    num_epochs = 2000
+    num_epochs = 1
     loss_type = "chamfer"
     ignore_uv = True
     axis = "y"
@@ -751,7 +755,7 @@ def main():
     resolution_v = 50
 
     w_lap = 0.8
-    mod_iter = 1000
+    mod_iter = 2000
     cglobal = 1
     average = 1
     learning_rate = 0.5
@@ -1079,7 +1083,48 @@ def main():
     # force the last 4 elements of and V to be 1
     U[-4:] = 1
     V[-4:] = 1
-    reconstructed_mesh(object_name, filename_ctrpts, num_ctrl_pts1, num_ctrl_pts2, U, V)
+    surfpts, tangent_vectors, normal_vectors = reconstructed_mesh(object_name, filename_ctrpts, num_ctrl_pts1, num_ctrl_pts2, U, V)
+
+    # Start plotting of the surface and the control points grid
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    # ax = Axes3D(fig)
+
+    # Plot surface points
+    #plot points 3d
+    ax.scatter(surfpts[:, 0], surfpts[:, 1], surfpts[:, 2], color='xkcd:gold', marker='^')
+    # ax.plot_trisurf(surfpts[:, 0], surfpts[:, 1], surfpts[:, 2], color='xkcd:gold', alpha=0.5)
+
+    # Plot tangent vectors (u-dir)
+    ax.quiver(tangent_vectors[:, 0, 0], tangent_vectors[:, 0, 1], tangent_vectors[:, 0, 2],
+              tangent_vectors[:, 1, 0], tangent_vectors[:, 1, 1], tangent_vectors[:, 1, 2],
+              color='xkcd:bright blue', length=1)
+
+    # Plot tangent vectors (v-dir)
+    ax.quiver(tangent_vectors[:, 0, 0], tangent_vectors[:, 0, 1], tangent_vectors[:, 0, 2],
+              tangent_vectors[:, 2, 0], tangent_vectors[:, 2, 1], tangent_vectors[:, 2, 2],
+              color='xkcd:neon green', length=1)
+
+    # Plot normal vectors
+    ax.quiver(normal_vectors[:, 0, 0], normal_vectors[:, 0, 1], normal_vectors[:, 0, 2],
+              normal_vectors[:, 1, 0], normal_vectors[:, 1, 1], normal_vectors[:, 1, 2],
+              color='xkcd:bright red', length=2)
+
+    # Add legend to 3D plot, @ref: https://stackoverflow.com/a/20505720
+    surface_prx = matplotlib.lines.Line2D([0], [0], linestyle='none', color='xkcd:gold', marker='^')
+    tanu_prx = matplotlib.lines.Line2D([0], [0], linestyle='none', color='xkcd:bright blue', marker='>')
+    tanv_prx = matplotlib.lines.Line2D([0], [0], linestyle='none', color='xkcd:neon green', marker='>')
+    normal_prx = matplotlib.lines.Line2D([0], [0], linestyle='none', color='xkcd:bright red', marker='>')
+    ax.legend([surface_prx, tanu_prx, tanv_prx, normal_prx],
+              ['Surface Plot', 'Tangent Vectors (u-dir)', 'Tangent Vectors (v-dir)', 'Normal Vectors'],
+              numpoints=1)
+    # # Rotate the axes and update the plot
+    # for angle in range(0, 360, 10):
+    #     ax.view_init(30, angle)
+    #     plt.draw()
+    #     plt.pause(.001)
+
+    plt.show()
     
     pass
 

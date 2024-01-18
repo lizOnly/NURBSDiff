@@ -14,6 +14,8 @@ from geomdl import NURBS
 from geomdl import exchange, utilities
 # from geomdl.visualization import VisMPL as vis
 from geomdl import operations
+import numpy as np
+import itertools
 
 def reconstructed_mesh(object_name, filename, num_ctrl_pts1, num_ctrl_pts2, u, v):
     # Create a NURBS surface instance
@@ -40,10 +42,25 @@ def reconstructed_mesh(object_name, filename, num_ctrl_pts1, num_ctrl_pts2, u, v
     
     surf.render()
 
+    uv_vals = list(itertools.product(surf.knotvector_u, surf.knotvector_v))
+    surftans = [[] for _ in range(len(uv_vals))]
+    surfnorms = [[] for _ in range(len(uv_vals))]
+    idx = 0
+
+    for u,v in list(itertools.product(surf.knotvector_u, surf.knotvector_v)):
+        surftans[idx] = operations.tangent(surf, [u,v], normalize=True)
+        surfnorms[idx] = operations.normal(surf, [u,v], normalize=True)
+        idx += 1
+
+    # Prepare points for plotting
+    surfpts = np.array(surf.evalpts)
+    tangent_vectors = np.array(surftans)
+    normal_vectors = np.array(surfnorms)
+
     # save the object
     exchange.export_obj(surf, filename + "_mesh.obj")
 
-    pass
+    return surfpts, tangent_vectors, normal_vectors
 
 def reconstructed_mesh_with_weights(object_name, filename, u, v):
     surf = NURBS.Surface()
