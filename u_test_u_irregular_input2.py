@@ -3,6 +3,9 @@ import time
 import torch
 import numpy as np
 import os
+from geomdl import NURBS
+from geomdl import operations
+from geomdl import exchange, utilities
 
 #from DuckyFittingOriginal import read_weights
 # from examples.splinenet import DGCNNControlPoints, get_graph_feature
@@ -18,6 +21,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import matplotlib
+import itertools
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -704,6 +708,47 @@ def read_irregular_file(path):
                 input_point_list.append((x, y, z))
 
     return input_point_list, target_list, vertex_positions, resolution_u
+def get_normals(weights, inp_ctrl_pts, knot_int_u, knot_int_v, num_ctrl_pts1, num_ctrl_pts2, layer):
+    predictedweights = weights.detach().cpu().numpy().squeeze(0)
+    predictedctrlpts = inp_ctrl_pts.detach().cpu().numpy().squeeze()
+
+    predictedknotu = knot_int_u.detach().cpu().numpy().squeeze().tolist()
+    predictedknotu = [0., 0., 0., 0., 0.] + predictedknotu + [1., 1., 1., 1.]
+    predictedknotv = knot_int_v.detach().cpu().numpy().squeeze().tolist()
+    predictedknotv = [0., 0., 0., 0., 0.] + predictedknotv + [1., 1., 1., 1.]
+
+    surf = NURBS.Surface()
+    # Set degrees
+    surf.degree_u = 3
+    surf.degree_v = 3
+
+    surf.ctrlpts_size_u = num_ctrl_pts1
+    surf.ctrlpts_size_v = num_ctrl_pts2
+
+    # reshape predictedctrlpts to a list
+    predictedctrlpts = predictedctrlpts.reshape(num_ctrl_pts1 * num_ctrl_pts2, 3)
+    surf.ctrlpts = predictedctrlpts
+    predictedweights = predictedweights.reshape(num_ctrl_pts1 * num_ctrl_pts2, 1)
+    # surf.weights = predictedweights
+
+    U, V = layer.getrealUV()
+    U = U.detach().cpu().numpy().reshape(-1, 1)
+    V = V.detach().cpu().numpy().reshape(-1, 1)
+
+    # Set knot vectors
+    surf.knotvector_u = list(U)
+    surf.knotvector_v = list(V)
+
+    uv_vals = list(itertools.product(surf.knotvector_u, surf.knotvector_v))
+    surfnorms = [[] for _ in range(len(uv_vals))]
+    idx = 0
+
+    for u, v in list(itertools.product(surf.knotvector_u, surf.knotvector_v)):
+        surfnorms[idx] = operations.normal(surf, [u, v], normalize=False)
+        idx += 1
+
+    surfpts = np.array(surf.evalpts)
+    normal_vectors = np.array(surfnorms)
 def main():
 
     gt_path = os.path.dirname(os.path.realpath(__file__))
@@ -735,7 +780,7 @@ def main():
     
     object_name = gt_path.split("/")[-1].split(".")[0]
     
-    num_epochs = 1
+    num_epochs = 10
     loss_type = "chamfer"
     ignore_uv = True
     axis = "y"
@@ -755,13 +800,13 @@ def main():
     resolution_v = 50
 
     w_lap = 0.8
-    mod_iter = 2000
+    mod_iter = 5
     cglobal = 1
     average = 1
     learning_rate = 0.5
 
     #best
-    learning_rate = 0.15
+    learning_rate = 0.05
     
     # load point cloud
     max_coord = min_coord = 0
@@ -798,12 +843,20 @@ def main():
     num_ctrl_pts2 = ctr_pts_v
 
     inp_ctrl_pts.requires_grad = True
+    n_knots_u = num_ctrl_pts1+p+1-2*p-1
+    n_knots_v = num_ctrl_pts2+q+1-2*q-1
+
+    knots_u = (torch.range(0.01, n_knots_u)/n_knots_u)
+    knots_u[-1] = 1
+    knots_v = (torch.range(0.01, n_knots_u)/n_knots_v)
+    knots_v[-1] = 1
+
     # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
     knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 - p).unsqueeze(0).cuda(), requires_grad=True)
-    # knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 + p - 1).unsqueeze(0).cuda(), requires_grad=True)
+    # knot_int_u = torch.nn.Parameter(knots_u.unsqueeze(0).cuda(), requires_grad=True)
     # knot_int_u = torch.nn.Parameter(torch.cat((torch.ones(num_ctrl_pts1 - p - 3), torch.zeros(3)), dim=0).unsqueeze(0).cuda(), requires_grad=True)
     knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2 - q).unsqueeze(0).cuda(), requires_grad=True)
-    # knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2 + q - 1).unsqueeze(0).cuda(), requires_grad=True)
+    # knot_int_v = torch.nn.Parameter(knots_v.unsqueeze(0).cuda(), requires_grad=True)
     # knot_int_v = torch.nn.Parameter(torch.cat((torch.ones(num_ctrl_pts2 - q - 1), torch.zeros(1)), dim=0).unsqueeze(0).cuda(), requires_grad=True)
     # knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1+p+1-2*p-1).unsqueeze(0).cuda(), requires_grad=True)
     # knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2+q+1-2*q-1).unsqueeze(0).cuda(), requires_grad=True)
@@ -863,17 +916,19 @@ def main():
             pass
         
         def closure():
-            if i % 100 < 30:
-                opt1.zero_grad()
-            else:
-                opt2.zero_grad()
-            # out = layer(inp_ctrl_pts)
-            # Extract the first layer of the tensor
+            # if i % 100 < 30:
+            #     opt1.zero_grad()
+            # else:
+            #     opt2.zero_grad()
+
+            opt1.zero_grad()
 
             out = layer((torch.cat((inp_ctrl_pts,weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
 
             loss = 0
-           
+
+            # get the normals
+
 
             if ignore_uv:
                 lap = laplacian_loss_unsupervised(inp_ctrl_pts)
@@ -901,6 +956,7 @@ def main():
                             ax.scatter(tgt_cpu[:, 0], tgt_cpu[:, 1], tgt_cpu[:, 2], c='r', marker='o')
                             ax.scatter(out_cpu[:, 0], out_cpu[:, 1], out_cpu[:, 2], c='b', marker='o')
                             plt.show()
+
                         loss = (1-w_lap) * chamfer_distance(out, tgt) + w_lap * lap
 
                     #decrease w_lap according to the epoch
@@ -920,7 +976,6 @@ def main():
 
 
         if i % 100 < 30:
-
             loss = opt1.step(closure)
             lr_schedule1.step(loss)
         else:
