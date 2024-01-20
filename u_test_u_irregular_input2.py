@@ -468,7 +468,10 @@ def laplacian_loss_unsupervised(output, dist_type="l2"):
     filter = np.stack([filter, np.roll(filter, 1, 0), np.roll(filter, 2, 0)])
 
     filter = -np.array(filter, dtype=np.float32)
-    filter = Variable(torch.from_numpy(filter)).cuda()
+    if torch.cuda.is_available():
+        filter = Variable(torch.from_numpy(filter)).cuda()
+    else:
+        filter = Variable(torch.from_numpy(filter))
     # print(output.shape)
     laplacian_output = F.conv2d(output.permute(0, 3, 1, 2), filter, padding=1)
     # print(laplacian_output.shape)
@@ -696,7 +699,10 @@ def read_irregular_file(path):
             if line.startswith('#'):
                 resolution_u += 1
                 if len(vertex_positions) > 0:
-                    target = torch.tensor(vertex_positions).float().cuda()
+                    if torch.cuda.is_available():
+                        target = torch.tensor(vertex_positions).float().cuda()
+                    else:
+                        target = torch.tensor(vertex_positions).float()
                     target_list.append(target)
                     vertex_positions = []
 
@@ -807,34 +813,30 @@ def main():
 
     #best
     learning_rate = 0.05
-    
-    # load point cloud
-    max_coord = min_coord = 0
-
-
-
 
     input_point_list, target_list, vertex_positions, resolution_u = read_irregular_file(cm_path)
 
     print("#input points " + str(len(input_point_list)))
 
-    target = torch.tensor(vertex_positions).float().cuda()
+    if torch.cuda.is_available():
+        target = torch.tensor(vertex_positions).float().cuda()
+    else:
+        target = torch.tensor(vertex_positions).float()
+
     print(target.shape)
     target_list.append(target)
 
     sample_size_u = resolution_u
     sample_size_v = resolution_v
 
-    
-
-    num_eval_pts_u = resolution_u
-
     cp_input_point_list, cp_target_list, cp_vertex_positions, cp_resolution_u = read_irregular_file(ctr_pts_path)
 
     print("#input control points " + str(len(cp_input_point_list)))
 
-    # reshape cp_input_point_list to (1, cp_resolution_u, cp_resolution_u, 3)
-    inp_ctrl_pts = torch.tensor(cp_input_point_list).float().cuda().reshape(1, cp_resolution_u, cp_resolution_u, 3)
+    if torch.cuda.is_available():
+        inp_ctrl_pts = torch.tensor(cp_input_point_list).float().cuda().reshape(1, cp_resolution_u, cp_resolution_u, 3).cuda()
+    else:
+        inp_ctrl_pts = torch.tensor(cp_input_point_list).float().reshape(1, cp_resolution_u, cp_resolution_u, 3)
 
     ctr_pts_u = cp_resolution_u
     ctr_pts_v = cp_resolution_u
@@ -846,28 +848,27 @@ def main():
     n_knots_u = num_ctrl_pts1+p+1-2*p-1
     n_knots_v = num_ctrl_pts2+q+1-2*q-1
 
-    knots_u = (torch.range(0.01, n_knots_u)/n_knots_u)
-    knots_u[-1] = 1
-    knots_v = (torch.range(0.01, n_knots_u)/n_knots_v)
-    knots_v[-1] = 1
+    #change knots to uniform 0 1
+    # knots_u = (torch.range(0.01, n_knots_u)/n_knots_u)
+    # knots_u[-1] = 1
+    # knots_v = (torch.range(0.01, n_knots_u)/n_knots_v)
+    # knots_v[-1] = 1
 
     # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
-    knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 - p).unsqueeze(0).cuda(), requires_grad=True)
-    # knot_int_u = torch.nn.Parameter(knots_u.unsqueeze(0).cuda(), requires_grad=True)
-    # knot_int_u = torch.nn.Parameter(torch.cat((torch.ones(num_ctrl_pts1 - p - 3), torch.zeros(3)), dim=0).unsqueeze(0).cuda(), requires_grad=True)
-    knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2 - q).unsqueeze(0).cuda(), requires_grad=True)
-    # knot_int_v = torch.nn.Parameter(knots_v.unsqueeze(0).cuda(), requires_grad=True)
-    # knot_int_v = torch.nn.Parameter(torch.cat((torch.ones(num_ctrl_pts2 - q - 1), torch.zeros(1)), dim=0).unsqueeze(0).cuda(), requires_grad=True)
-    # knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1+p+1-2*p-1).unsqueeze(0).cuda(), requires_grad=True)
-    # knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2+q+1-2*q-1).unsqueeze(0).cuda(), requires_grad=True)
-    if inp_ctrl_pts.requires_grad:
-        print("inp_ctrl_pts is trainable")
-    else:
-        print("inp_ctrl_pts is not trainable")
-    weights = torch.nn.Parameter(torch.ones(1,num_ctrl_pts1,num_ctrl_pts2,1).float().cuda(), requires_grad=True)
+    if torch.cuda.is_available():
+        knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 - p).unsqueeze(0).cuda(), requires_grad=True)
+        knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2 - q).unsqueeze(0).cuda(), requires_grad=True)
+        weights = torch.nn.Parameter(torch.ones(1, num_ctrl_pts1, num_ctrl_pts2, 1).float().cuda(), requires_grad=True)
+        layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=sample_size_u, out_dim_v=sample_size_v, method='tc', dvc='cuda').cuda()
 
-    # print(target.shape)
-    layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=sample_size_u, out_dim_v=sample_size_v, method='tc', dvc='cuda').cuda()
+    else:
+        knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 - p).unsqueeze(0), requires_grad=True)
+        # knot_int_u = torch.nn.Parameter(knots_u.unsqueeze(0).cuda(), requires_grad=True)
+        # knot_int_u = torch.nn.Parameter(torch.cat((torch.ones(num_ctrl_pts1 - p - 3), torch.zeros(3)), dim=0).unsqueeze(0).cuda(), requires_grad=True)
+        knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2 - q).unsqueeze(0), requires_grad=True)
+        # knot_int_v = torch.nn.Parameter(knots_v.unsqueeze(0).cuda(), requires_grad=True)
+        weights = torch.nn.Parameter(torch.ones(1,num_ctrl_pts1,num_ctrl_pts2,1).float(), requires_grad=True)
+        layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=sample_size_u, out_dim_v=sample_size_v, method='tc')
     
     opt1 = torch.optim.Adam(iter([inp_ctrl_pts, weights]), lr=learning_rate)
     opt2 = torch.optim.Adam(iter([knot_int_u, knot_int_v]), lr=1e-2)
@@ -880,11 +881,16 @@ def main():
     # fig = plt.figure(figsize=(15, 9))
     time1 = time.time()
     
-    
-    knot_rep_p_0 = torch.zeros(1,p+1).cuda()
-    knot_rep_p_1 = torch.zeros(1,p).cuda()
-    knot_rep_q_0 = torch.zeros(1,q+1).cuda()
-    knot_rep_q_1 = torch.zeros(1,q).cuda()
+    if torch.cuda.is_available():
+        knot_rep_p_0 = torch.zeros(1, p + 1).cuda()
+        knot_rep_p_1 = torch.zeros(1, p).cuda()
+        knot_rep_q_0 = torch.zeros(1, q + 1).cuda()
+        knot_rep_q_1 = torch.zeros(1, q).cuda()
+    else:
+        knot_rep_p_0 = torch.zeros(1,p+1)
+        knot_rep_p_1 = torch.zeros(1,p)
+        knot_rep_q_0 = torch.zeros(1,q+1)
+        knot_rep_q_1 = torch.zeros(1,q)
     beforeTrained = layer((torch.cat((inp_ctrl_pts,weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))[0].detach().cpu().numpy().squeeze()
     
     with open(f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}_before_trained.OFF', 'w') as f:
@@ -899,10 +905,16 @@ def main():
     
     for i in pbar:
         # torch.cuda.empty_cache()
-        knot_rep_p_0 = torch.zeros(1,p+1).cuda()
-        knot_rep_p_1 = torch.zeros(1,p).cuda()
-        knot_rep_q_0 = torch.zeros(1,q+1).cuda()
-        knot_rep_q_1 = torch.zeros(1,q).cuda()
+        if torch.cuda.is_available():
+            knot_rep_p_0 = torch.zeros(1, p + 1).cuda()
+            knot_rep_p_1 = torch.zeros(1, p).cuda()
+            knot_rep_q_0 = torch.zeros(1, q + 1).cuda()
+            knot_rep_q_1 = torch.zeros(1, q).cuda()
+        else:
+            knot_rep_p_0 = torch.zeros(1,p+1)
+            knot_rep_p_1 = torch.zeros(1,p)
+            knot_rep_q_0 = torch.zeros(1,q+1)
+            knot_rep_q_1 = torch.zeros(1,q)
 
         with torch.no_grad():
             # #rows
@@ -924,18 +936,12 @@ def main():
             opt1.zero_grad()
 
             out = layer((torch.cat((inp_ctrl_pts,weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
-
             loss = 0
 
             # get the normals
-
-
             if ignore_uv:
                 lap = laplacian_loss_unsupervised(inp_ctrl_pts)
                 out = out.reshape(sample_size_u, sample_size_v, 3)
-
-
-
 
                 if loss_type == 'chamfer':
                     # if global loss
@@ -1081,12 +1087,19 @@ def main():
             # Write the row values to the file as a string separated by spaces
             f.write(','.join([str(row)]) + '\n')
 
-
-    layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=out_dim_u, out_dim_v=out_dim_v, method='tc', dvc='cuda').cuda()
-    knot_rep_p_0 = torch.zeros(1,p+1).cuda()
-    knot_rep_p_1 = torch.zeros(1,p).cuda()
-    knot_rep_q_0 = torch.zeros(1,q+1).cuda()
-    knot_rep_q_1 = torch.zeros(1,q).cuda()
+    if torch.cuda.is_available():
+        layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=out_dim_u, out_dim_v=out_dim_v,
+                         method='tc', dvc='cuda').cuda()
+        knot_rep_p_0 = torch.zeros(1, p + 1).cuda()
+        knot_rep_p_1 = torch.zeros(1, p).cuda()
+        knot_rep_q_0 = torch.zeros(1, q + 1).cuda()
+        knot_rep_q_1 = torch.zeros(1, q).cuda()
+    else:
+        layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=out_dim_u, out_dim_v=out_dim_v, method='tc')
+        knot_rep_p_0 = torch.zeros(1,p+1)
+        knot_rep_p_1 = torch.zeros(1,p)
+        knot_rep_q_0 = torch.zeros(1,q+1)
+        knot_rep_q_1 = torch.zeros(1,q)
 
     out2 = layer((torch.cat((inp_ctrl_pts, weights), -1), torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1), torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)))
     out2 = out2.detach().cpu().numpy().squeeze(0).reshape(out_dim_u, out_dim_v, 3)
