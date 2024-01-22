@@ -853,7 +853,7 @@ def main():
     out_dim_v = 250
     ctr_pts_u = 15
     ctr_pts_v = 15
-    resolution_v = 50
+    resolution_v = 51
 
     w_lap = 0.8
     mod_iter = 5
@@ -1011,8 +1011,10 @@ def main():
                             #visualize tgt and out
                             fig = plt.figure()
                             ax = fig.add_subplot( projection='3d')
-                            ax.scatter(tgt_cpu[:, 0], tgt_cpu[:, 1], tgt_cpu[:, 2], c='r', marker='o')
-                            ax.scatter(out_cpu[:, 0], out_cpu[:, 1], out_cpu[:, 2], c='b', marker='o')
+                            a = 102
+                            b = 153
+                            ax.scatter(tgt_cpu[a:b, 0], tgt_cpu[a:b, 1], tgt_cpu[a:b, 2], c='r', marker='o')
+                            ax.scatter(out_cpu[a:b, 0], out_cpu[a:b, 1], out_cpu[a:b, 2], c='b', marker='o')
                             plt.show()
 
                         loss = (1-w_lap) * chamfer_distance(out, tgt) + w_lap * lap
