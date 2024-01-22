@@ -37,6 +37,9 @@ class SurfEval(torch.nn.Module):
         return self.uspan_uv, self.vspan_uv
     def getrealUV(self):
         return self.U, self.V
+
+    def get_spanned_uv(self):
+        return self.u, self.v
     def getuindices(self):
         uindices = None
         for l in range(self.p+1):

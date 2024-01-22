@@ -714,14 +714,14 @@ def read_irregular_file(path):
                 input_point_list.append((x, y, z))
 
     return input_point_list, target_list, vertex_positions, resolution_u
-def get_normals(weights, inp_ctrl_pts, knot_int_u, knot_int_v, num_ctrl_pts1, num_ctrl_pts2, layer):
+def get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer):
     predictedweights = weights.detach().cpu().numpy().squeeze(0)
     predictedctrlpts = inp_ctrl_pts.detach().cpu().numpy().squeeze()
 
-    predictedknotu = knot_int_u.detach().cpu().numpy().squeeze().tolist()
-    predictedknotu = [0., 0., 0., 0., 0.] + predictedknotu + [1., 1., 1., 1.]
-    predictedknotv = knot_int_v.detach().cpu().numpy().squeeze().tolist()
-    predictedknotv = [0., 0., 0., 0., 0.] + predictedknotv + [1., 1., 1., 1.]
+    # predictedknotu = knot_int_u.detach().cpu().numpy().squeeze().tolist()
+    # predictedknotu = [0., 0., 0., 0., 0.] + predictedknotu + [1., 1., 1., 1.]
+    # predictedknotv = knot_int_v.detach().cpu().numpy().squeeze().tolist()
+    # predictedknotv = [0., 0., 0., 0., 0.] + predictedknotv + [1., 1., 1., 1.]
 
     surf = NURBS.Surface()
     # Set degrees
@@ -745,16 +745,24 @@ def get_normals(weights, inp_ctrl_pts, knot_int_u, knot_int_v, num_ctrl_pts1, nu
     surf.knotvector_u = list(U)
     surf.knotvector_v = list(V)
 
-    uv_vals = list(itertools.product(surf.knotvector_u, surf.knotvector_v))
-    surfnorms = [[] for _ in range(len(uv_vals))]
+    u_span, v_span = layer.get_spanned_uv()
+    u_span = u_span.detach().cpu().numpy().astype(float)
+    v_span = v_span.detach().cpu().numpy().astype(float)
+    # uv_vals = list(itertools.product(u, v))
+    surfnorms = [[] for _ in range(len(u_span) * len(v_span))]
     idx = 0
 
-    for u, v in list(itertools.product(surf.knotvector_u, surf.knotvector_v)):
-        surfnorms[idx] = operations.normal(surf, [u, v], normalize=False)
+    cross = list(itertools.product(u_span, v_span))
+
+
+    for u, v in list(itertools.product(u_span, v_span)):
+        surfnorms[idx] = operations.normal(surf, [u, v], normalize=True)
         idx += 1
 
     surfpts = np.array(surf.evalpts)
     normal_vectors = np.array(surfnorms)
+
+    return  surfpts, normal_vectors
 
 def plot_tangent_normnals(surfpts, tangent_vectors, normal_vectors):
     # Start plotting of the surface and the control points grid
@@ -981,6 +989,8 @@ def main():
             loss = 0
 
             # get the normals
+            surfpts, normals = get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer)
+
             if ignore_uv:
                 lap = laplacian_loss_unsupervised(inp_ctrl_pts)
                 out = out.reshape(sample_size_u, sample_size_v, 3)
@@ -1067,7 +1077,7 @@ def main():
 
     print((time.time() - time1)/ (num_epochs+1))
 
-    U, V = layer.getrealUV()       
+    U, V = layer.getrealUV()
     U = U.detach().cpu().numpy().reshape(-1, 1)
     V = V.detach().cpu().numpy().reshape(-1, 1)
     target_mpl = target.cpu().numpy().squeeze()
@@ -1143,8 +1153,8 @@ def main():
         knot_rep_q_0 = torch.zeros(1,q+1)
         knot_rep_q_1 = torch.zeros(1,q)
 
-    knots_u = torch.cat((knot_rep_p_0,knot_int_u,knot_rep_p_1), -1)
-    knots_v = torch.cat((knot_rep_q_0,knot_int_v,knot_rep_q_1), -1)
+    knots_u = torch.cat((knot_rep_p_0, knot_int_u, knot_rep_p_1), -1)
+    knots_v = torch.cat((knot_rep_q_0, knot_int_v, knot_rep_q_1), -1)
 
     out2 = layer((torch.cat((inp_ctrl_pts, weights), -1), knots_u, knots_v))
     out2 = out2.detach().cpu().numpy().squeeze(0).reshape(out_dim_u, out_dim_v, 3)
