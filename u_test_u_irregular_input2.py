@@ -836,7 +836,7 @@ def main():
     
     object_name = gt_path.split("/")[-1].split(".")[0]
     
-    num_epochs = 10
+    num_epochs = 2000
     loss_type = "chamfer"
     ignore_uv = True
     axis = "y"
@@ -856,7 +856,7 @@ def main():
     resolution_v = 51
 
     w_lap = 0.8
-    mod_iter = 5
+    mod_iter = 1000
     cglobal = 1
     average = 1
     learning_rate = 0.5
@@ -989,7 +989,7 @@ def main():
             loss = 0
 
             # get the normals
-            surfpts, normals = get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer)
+            # surfpts, normals = get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer)
 
             if ignore_uv:
                 lap = laplacian_loss_unsupervised(inp_ctrl_pts)
@@ -1011,8 +1011,10 @@ def main():
                             #visualize tgt and out
                             fig = plt.figure()
                             ax = fig.add_subplot( projection='3d')
-                            a = 102
-                            b = 153
+                            # a = 102
+                            # b = 153
+                            a = 0
+                            b = -1
                             ax.scatter(tgt_cpu[a:b, 0], tgt_cpu[a:b, 1], tgt_cpu[a:b, 2], c='r', marker='o')
                             ax.scatter(out_cpu[a:b, 0], out_cpu[a:b, 1], out_cpu[a:b, 2], c='b', marker='o')
                             plt.show()
