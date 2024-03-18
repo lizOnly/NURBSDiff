@@ -48,8 +48,13 @@ def reconstructed_mesh(object_name, filename, num_ctrl_pts1, num_ctrl_pts2, u, v
     idx = 0
 
     for u,v in list(itertools.product(surf.knotvector_u, surf.knotvector_v)):
-        surftans[idx] = operations.tangent(surf, [u,v], normalize=True)
-        surfnorms[idx] = operations.normal(surf, [u,v], normalize=True)
+        try:
+            surftans[idx] = operations.tangent(surf, [u,v], normalize=True)
+            surfnorms[idx] = operations.normal(surf, [u,v], normalize=True)
+        except:
+            print(u, v)
+            surftans[idx] = operations.tangent(surf, [u,v], normalize=False)
+            surfnorms[idx] = operations.normal(surf, [u,v], normalize=False)
         idx += 1
 
     # Prepare points for plotting

@@ -778,17 +778,17 @@ def plot_tangent_normnals(surfpts, tangent_vectors, normal_vectors):
     # Plot tangent vectors (u-dir)
     ax.quiver(tangent_vectors[:, 0, 0], tangent_vectors[:, 0, 1], tangent_vectors[:, 0, 2],
               tangent_vectors[:, 1, 0], tangent_vectors[:, 1, 1], tangent_vectors[:, 1, 2],
-              color='xkcd:bright blue', length=0.5)
+              color='xkcd:bright blue', length=0.25)
 
     # Plot tangent vectors (v-dir)
     ax.quiver(tangent_vectors[:, 0, 0], tangent_vectors[:, 0, 1], tangent_vectors[:, 0, 2],
               tangent_vectors[:, 2, 0], tangent_vectors[:, 2, 1], tangent_vectors[:, 2, 2],
-              color='xkcd:neon green', length=0.5)
+              color='xkcd:neon green', length=0.25)
 
     # Plot normal vectors
     ax.quiver(normal_vectors[:, 0, 0], normal_vectors[:, 0, 1], normal_vectors[:, 0, 2],
               normal_vectors[:, 1, 0], normal_vectors[:, 1, 1], normal_vectors[:, 1, 2],
-              color='xkcd:bright red', length=1)
+              color='xkcd:bright red', length=0.35)
 
     # Add legend to 3D plot, @ref: https://stackoverflow.com/a/20505720
     surface_prx = matplotlib.lines.Line2D([0], [0], linestyle='none', color='xkcd:gold', marker='^')
