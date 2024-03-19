@@ -805,6 +805,12 @@ def plot_tangent_normnals(surfpts, tangent_vectors, normal_vectors):
     #     plt.pause(.001)
 
     plt.show()
+def compute_normals(points):
+    import open3d as o3d
+    pcd = o3d.t.geometry.PointCloud(np.array(points))
+    pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+    normals = np.asarray(pcd.normals)
+    return normals
 def main():
 
     gt_path = os.path.dirname(os.path.realpath(__file__))
@@ -880,6 +886,12 @@ def main():
     sample_size_v = resolution_v
 
     cp_input_point_list, cp_target_list, cp_vertex_positions, cp_resolution_u = read_irregular_file(ctr_pts_path)
+
+    # tgt = torch.stack(target_list)
+    # tgt = tgt.reshape(-1, 3)
+    # gt_points = tgt.detach().cpu().numpy()
+
+    # gt_normals = compute_normals(gt_points)
 
     print("#input control points " + str(len(cp_input_point_list)))
 
