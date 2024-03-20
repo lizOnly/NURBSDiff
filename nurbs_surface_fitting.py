@@ -1,0 +1,637 @@
+
+import time
+import torch
+import numpy as np
+import os
+
+from examples.test.mesh_reconstruction import reconstructed_mesh
+
+torch.manual_seed(120)
+from tensorboard_logger import configure, log_value
+from tqdm import tqdm
+# from pytorch3d.loss import chamfer_distance
+from NURBSDiff.nurbs_eval import SurfEval
+
+import matplotlib.pyplot as plt
+import matplotlib
+
+from torch.autograd.variable import Variable
+import torch.nn.functional as F
+
+
+
+SMALL_SIZE = 12
+MEDIUM_SIZE = 16
+BIGGER_SIZE = 20
+
+
+def chamfer_distance(pred, gt, sqrt=False):
+    """
+    Computes average chamfer distance prediction and groundtruth
+    :param pred: Prediction: M x N x 3
+    :param gt: ground truth: M x N x 3
+    :return:
+    """
+    # print(pred.shape)
+    if isinstance(pred, np.ndarray):
+        pred = Variable(torch.from_numpy(pred.astype(np.float32))).cuda()
+
+    if isinstance(gt, np.ndarray):
+        gt = Variable(torch.from_numpy(gt.astype(np.float32))).cuda()
+
+    pred = torch.unsqueeze(pred, 1)
+    gt = torch.unsqueeze(gt, 2)
+
+    diff = pred - gt
+    diff = torch.sum(diff ** 2, 3)
+    if sqrt:
+        diff = torch.sqrt(diff)
+
+    cd = torch.mean(torch.min(diff, 1)[0], 1) + torch.mean(torch.min(diff, 2)[0], 1)
+    cd = torch.mean(cd) / 2.0
+    return cd
+
+
+def chamfer_distance_each_row(pred, gt, sqrt=False):
+    """
+    Computes average chamfer distance prediction and groundtruth
+    :param pred: Prediction: M x N x 3
+    :param gt: ground truth: M x N x 3
+    :return:
+    """
+    # print(pred.shape)
+    if isinstance(pred, np.ndarray):
+        pred = Variable(torch.from_numpy(pred.astype(np.float32))).cuda()
+
+    if isinstance(gt, np.ndarray):
+        gt = Variable(torch.from_numpy(gt.astype(np.float32))).cuda()
+
+    # pred = torch.unsqueeze(pred, 1)
+    # gt = torch.unsqueeze(gt, 2)
+    row, col = pred.shape[0], pred.shape[1]
+    total_cd = 0
+    for i in range(row):
+        gt_row = gt[i]
+        pred_row = pred[i]
+
+        diff = pred_row.unsqueeze(0) - gt_row.unsqueeze(1)
+        dist = torch.sum(diff ** 2, dim=2)
+        if sqrt:
+            dist = torch.sqrt(dist)
+        dist1, _ = torch.min(dist, dim=1)
+        dist2, _ = torch.min(dist, dim=0)
+        total_cd += torch.mean(dist1, 0) + torch.mean(dist2, 0)
+    return total_cd / 2.0 / row
+
+def laplacian_loss_unsupervised(output, dist_type="l2"):
+    filter = ([[[0.0, 0.25, 0.0], [0.25, -1.0, 0.25], [0.0, 0.25, 0.0]],
+               [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+               [[0, 0, 0], [0, 0, 0], [0, 0, 0]]])
+
+    filter = np.stack([filter, np.roll(filter, 1, 0), np.roll(filter, 2, 0)])
+
+    filter = -np.array(filter, dtype=np.float32)
+    if torch.cuda.is_available():
+        filter = Variable(torch.from_numpy(filter)).cuda()
+    else:
+        filter = Variable(torch.from_numpy(filter))
+    # print(output.shape)
+    laplacian_output = F.conv2d(output.permute(0, 3, 1, 2), filter, padding=1)
+    # print(laplacian_output.shape)
+
+    if dist_type == "l2":
+        dist = torch.sum((laplacian_output) ** 2, 1)
+
+        # dist = torch.sum((laplacian_output) ** 2, (1,2,3)) + torch.sum((laplacian_input)**2,(1,2,3))
+    elif dist_type == "l1":
+        dist = torch.abs(torch.sum(laplacian_output.mean(),1))
+    dist = torch.mean(dist)
+    # num_points = output.shape[1] * output.shape[2] * output.shape[3]
+    return dist
+
+def read_irregular_file(path):
+
+    input_point_list = []
+    target_list = []
+
+    with open(path, 'r') as f:
+        # with open('../../meshes/cube_cluster0_geodesic.txt', 'r') as f:
+        # with open('ex_ducky.off', 'r') as f:
+
+        lines = f.readlines()
+
+        # skip the first line
+
+        # lines = random.sample(lines, k=resolution * resolution)
+        # extract vertex positions
+
+        resolution_u = 0
+        vertex_positions = []
+
+        for line in lines:
+            if line.startswith('#'):
+                resolution_u += 1
+                if len(vertex_positions) > 0:
+                    if torch.cuda.is_available():
+                        target = torch.tensor(vertex_positions).float().cuda()
+                    else:
+                        target = torch.tensor(vertex_positions).float()
+                    target_list.append(target)
+                    vertex_positions = []
+
+            else:
+                x, y, z = map(float, line.split()[:3])
+                # min_coord = min(min_coord, x, y, z)
+                # max_coord = max(max_coord, x, y, z)
+                vertex_positions.append((x, y, z))
+                input_point_list.append((x, y, z))
+
+    return input_point_list, target_list, vertex_positions, resolution_u
+
+def plot_tangent_normals(surfpts, tangent_vectors, normal_vectors):
+    # Start plotting of the surface and the control points grid
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    # ax = Axes3D(fig)
+
+    # Plot surface points
+    # plot points 3d
+    ax.scatter(surfpts[:, 0], surfpts[:, 1], surfpts[:, 2], color='xkcd:gold', marker='^')
+    # ax.plot_trisurf(surfpts[:, 0], surfpts[:, 1], surfpts[:, 2], color='xkcd:gold', alpha=0.5)
+
+    # Plot tangent vectors (u-dir)
+    ax.quiver(tangent_vectors[:, 0, 0], tangent_vectors[:, 0, 1], tangent_vectors[:, 0, 2],
+              tangent_vectors[:, 1, 0], tangent_vectors[:, 1, 1], tangent_vectors[:, 1, 2],
+              color='xkcd:bright blue', length=0.25)
+
+    # Plot tangent vectors (v-dir)
+    ax.quiver(tangent_vectors[:, 0, 0], tangent_vectors[:, 0, 1], tangent_vectors[:, 0, 2],
+              tangent_vectors[:, 2, 0], tangent_vectors[:, 2, 1], tangent_vectors[:, 2, 2],
+              color='xkcd:neon green', length=0.25)
+
+    # Plot normal vectors
+    ax.quiver(normal_vectors[:, 0, 0], normal_vectors[:, 0, 1], normal_vectors[:, 0, 2],
+              normal_vectors[:, 1, 0], normal_vectors[:, 1, 1], normal_vectors[:, 1, 2],
+              color='xkcd:bright red', length=0.35)
+
+    # Add legend to 3D plot, @ref: https://stackoverflow.com/a/20505720
+    surface_prx = matplotlib.lines.Line2D([0], [0], linestyle='none', color='xkcd:gold', marker='^')
+    tanu_prx = matplotlib.lines.Line2D([0], [0], linestyle='none', color='xkcd:bright blue', marker='>')
+    tanv_prx = matplotlib.lines.Line2D([0], [0], linestyle='none', color='xkcd:neon green', marker='>')
+    normal_prx = matplotlib.lines.Line2D([0], [0], linestyle='none', color='xkcd:bright red', marker='>')
+    ax.legend([surface_prx, tanu_prx, tanv_prx, normal_prx],
+              ['Surface Plot', 'Tangent Vectors (u-dir)', 'Tangent Vectors (v-dir)', 'Normal Vectors'],
+              numpoints=1)
+    # # Rotate the axes and update the plot
+    # for angle in range(0, 360, 10):
+    #     ax.view_init(30, angle)
+    #     plt.draw()
+    #     plt.pause(.001)
+
+    plt.show()
+
+def main():
+    gt_path = os.path.dirname(os.path.realpath(__file__))
+    gt_path = gt_path.split("/")[0:-1]
+    gt_path = "/".join(gt_path)
+
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+
+    # gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/brain.obj"
+    # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain.txt'
+    # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
+
+    # gt_path = "/mnt/Chest/Repositories/NURBSDiff/data/luigi.obj"
+    # cm_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_0.025_20.txt'
+    # ctr_pts_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_uniform_warp_offset_0.003_20.txt'
+
+    # gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/duck_clean.obj"
+    # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_ducky_0.003_50.txt'
+    # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_ducky_0.003_20.txt'
+
+    gt_path = gt_path + "/pygeodesics/data/sphere.obj"
+    cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
+    ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
+
+    # ctr_pts = 40
+    # resolution_u = 64
+    # resolution_v = 64
+    p = q = 3
+
+    object_name = gt_path.split("/")[-1].split(".")[0]
+
+    num_epochs = 2000
+    loss_type = "chamfer"
+    ignore_uv = True
+    axis = "y"
+
+    def get_current_time():
+        return time.strftime("%m%d%H%M%S", time.localtime())
+
+    current_time = get_current_time()
+
+    configure("logs/tensorboard/{}".format(f'{object_name}_irregular_input/{current_time}'), flush_secs=2)
+
+    # ducky parameters
+
+    out_dim_u = 250
+    out_dim_v = 250
+    ctr_pts_u = 15
+    ctr_pts_v = 15
+    resolution_v = 51
+
+    w_lap = 0.8
+    mod_iter = 1
+    cglobal = 1
+    average = 1
+    learning_rate = 0.5
+
+    # best
+    learning_rate = 0.05
+
+    input_point_list, target_list, vertex_positions, resolution_u = read_irregular_file(cm_path)
+
+    print("#input points " + str(len(input_point_list)))
+
+    if torch.cuda.is_available():
+        target = torch.tensor(vertex_positions).float().cuda()
+    else:
+        target = torch.tensor(vertex_positions).float()
+
+    print(target.shape)
+    target_list.append(target)
+
+    sample_size_u = resolution_u
+    sample_size_v = resolution_v
+
+    cp_input_point_list, cp_target_list, cp_vertex_positions, cp_resolution_u = read_irregular_file(ctr_pts_path)
+
+    # tgt = torch.stack(target_list)
+    # tgt = tgt.reshape(-1, 3)
+    # gt_points = tgt.detach().cpu().numpy()
+
+    # gt_normals = compute_normals(gt_points)
+
+    print("#input control points " + str(len(cp_input_point_list)))
+
+    if torch.cuda.is_available():
+        inp_ctrl_pts = torch.tensor(cp_input_point_list).float().cuda().reshape(1, cp_resolution_u, cp_resolution_u,
+                                                                                3).cuda()
+    else:
+        inp_ctrl_pts = torch.tensor(cp_input_point_list).float().reshape(1, cp_resolution_u, cp_resolution_u, 3)
+
+    ctr_pts_u = cp_resolution_u
+    ctr_pts_v = cp_resolution_u
+
+    num_ctrl_pts1 = ctr_pts_u
+    num_ctrl_pts2 = ctr_pts_v
+
+    inp_ctrl_pts.requires_grad = True
+    n_knots_u = num_ctrl_pts1 + p + 1 - 2 * p - 1
+    n_knots_v = num_ctrl_pts2 + q + 1 - 2 * q - 1
+
+    # change knots to uniform 0 1
+    # knots_u = (torch.range(0.01, n_knots_u)/n_knots_u)
+    # knots_u[-1] = 1
+    # knots_v = (torch.range(0.01, n_knots_u)/n_knots_v)
+    # knots_v[-1] = 1
+
+    # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
+    if torch.cuda.is_available():
+        knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 - p).unsqueeze(0).cuda(), requires_grad=True)
+        knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2 - q).unsqueeze(0).cuda(), requires_grad=True)
+        weights = torch.nn.Parameter(torch.ones(1, num_ctrl_pts1, num_ctrl_pts2, 1).float().cuda(), requires_grad=True)
+        layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=sample_size_u,
+                         out_dim_v=sample_size_v, method='tc', dvc='cuda').cuda()
+
+    else:
+        knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 - p).unsqueeze(0), requires_grad=True)
+        # knot_int_u = torch.nn.Parameter(knots_u.unsqueeze(0).cuda(), requires_grad=True)
+        # knot_int_u = torch.nn.Parameter(torch.cat((torch.ones(num_ctrl_pts1 - p - 3), torch.zeros(3)), dim=0).unsqueeze(0).cuda(), requires_grad=True)
+        knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2 - q).unsqueeze(0), requires_grad=True)
+        # knot_int_v = torch.nn.Parameter(knots_v.unsqueeze(0).cuda(), requires_grad=True)
+        weights = torch.nn.Parameter(torch.ones(1, num_ctrl_pts1, num_ctrl_pts2, 1).float(), requires_grad=True)
+        layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=sample_size_u,
+                         out_dim_v=sample_size_v, method='tc')
+
+    opt1 = torch.optim.Adam(iter([inp_ctrl_pts, weights]), lr=learning_rate)
+    opt2 = torch.optim.Adam(iter([knot_int_u, knot_int_v]), lr=1e-2)
+    lr_schedule1 = torch.optim.lr_scheduler.ReduceLROnPlateau(opt1, patience=10, factor=0.1, verbose=True, min_lr=1e-5,
+                                                              eps=1e-08, threshold=1e-4, threshold_mode='rel',
+                                                              cooldown=0,
+                                                              )
+    lr_schedule2 = torch.optim.lr_scheduler.ReduceLROnPlateau(opt2, patience=5, factor=0.1, verbose=True, min_lr=1e-5,
+                                                              eps=1e-08, threshold=1e-4, threshold_mode='rel',
+                                                              cooldown=0, )
+    pbar = tqdm(range(num_epochs))
+    # fig = plt.figure(figsize=(15, 9))
+    time1 = time.time()
+
+    if torch.cuda.is_available():
+        knot_rep_p_0 = torch.zeros(1, p + 1).cuda()
+        knot_rep_p_1 = torch.zeros(1, p).cuda()
+        knot_rep_q_0 = torch.zeros(1, q + 1).cuda()
+        knot_rep_q_1 = torch.zeros(1, q).cuda()
+    else:
+        knot_rep_p_0 = torch.zeros(1, p + 1)
+        knot_rep_p_1 = torch.zeros(1, p)
+        knot_rep_q_0 = torch.zeros(1, q + 1)
+        knot_rep_q_1 = torch.zeros(1, q)
+    beforeTrained = layer((torch.cat((inp_ctrl_pts, weights), -1),
+                           torch.cat((knot_rep_p_0, knot_int_u, knot_rep_p_1), -1),
+                           torch.cat((knot_rep_q_0, knot_int_v, knot_rep_q_1), -1)))[0].detach().cpu().numpy().squeeze()
+
+    with open(
+            f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}_before_trained.OFF',
+            'w') as f:
+        # Loop over the array rows
+        f.write('OFF\n')
+        f.write(str(sample_size_u * sample_size_v) + ' ' + '0 0\n')
+        for i in range(sample_size_u):
+            for j in range(sample_size_v):
+                # print(predicted_target[i, j, :])
+                line = str(beforeTrained[i, j, 0]) + ' ' + str(beforeTrained[i, j, 1]) + ' ' + str(
+                    beforeTrained[i, j, 2]) + '\n'
+                f.write(line)
+
+    for i in pbar:
+        # torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            knot_rep_p_0 = torch.zeros(1, p + 1).cuda()
+            knot_rep_p_1 = torch.zeros(1, p).cuda()
+            knot_rep_q_0 = torch.zeros(1, q + 1).cuda()
+            knot_rep_q_1 = torch.zeros(1, q).cuda()
+        else:
+            knot_rep_p_0 = torch.zeros(1, p + 1)
+            knot_rep_p_1 = torch.zeros(1, p)
+            knot_rep_q_0 = torch.zeros(1, q + 1)
+            knot_rep_q_1 = torch.zeros(1, q)
+
+        with torch.no_grad():
+            # #rows
+            if average > 0:
+                inp_ctrl_pts[:, 0, :, :] = inp_ctrl_pts[:, 0, :, :].mean(1)
+                inp_ctrl_pts[:, -1, :, :] = inp_ctrl_pts[:, -1, :, :].mean(1)
+                inp_ctrl_pts[:, :, 0, :] = inp_ctrl_pts[:, :, -3, :] = (inp_ctrl_pts[:, :, 0, :] + inp_ctrl_pts[:, :,
+                                                                                                   -3, :]) / 2
+                inp_ctrl_pts[:, :, 1, :] = inp_ctrl_pts[:, :, -2, :] = (inp_ctrl_pts[:, :, 1, :] + inp_ctrl_pts[:, :,
+                                                                                                   -2, :]) / 2
+                inp_ctrl_pts[:, :, 2, :] = inp_ctrl_pts[:, :, -1, :] = (inp_ctrl_pts[:, :, 2, :] + inp_ctrl_pts[:, :,
+                                                                                                   -1, :]) / 2
+
+            pass
+
+        def closure():
+            # if i % 100 < 30:
+            #     opt1.zero_grad()
+            # else:
+            #     opt2.zero_grad()
+
+            opt1.zero_grad()
+
+            out = layer((
+                        torch.cat((inp_ctrl_pts, weights), -1), torch.cat((knot_rep_p_0, knot_int_u, knot_rep_p_1), -1),
+                        torch.cat((knot_rep_q_0, knot_int_v, knot_rep_q_1), -1)))
+            loss = 0
+
+            # get the normals
+            # surfpts, normals = get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer)
+
+            if ignore_uv:
+                lap = laplacian_loss_unsupervised(inp_ctrl_pts)
+                out = out.reshape(sample_size_u, sample_size_v, 3)
+
+                if loss_type == 'chamfer':
+                    # if global loss
+
+                    if cglobal == True:
+                        # loss = chamfer_distance(out_knn, input_ctrl_pts_knn)
+                        tgt = torch.stack(target_list)
+                        tgt = tgt.reshape(-1, 3).unsqueeze(0)
+                        out = out.reshape(1, sample_size_u * sample_size_v, 3)
+
+                        if (i + 1) % mod_iter == 0:
+                            # copy tgt to host
+                            tgt_cpu = tgt.detach().cpu().numpy().squeeze()
+                            out_cpu = out.detach().cpu().numpy().squeeze()
+                            # visualize tgt and out
+                            fig = plt.figure()
+                            ax = fig.add_subplot(projection='3d')
+                            # a = 102
+                            # b = 153
+                            a = 0
+                            b = -1
+                            ax.scatter(tgt_cpu[a:b, 0], tgt_cpu[a:b, 1], tgt_cpu[a:b, 2], c='r', marker='o')
+                            ax.scatter(out_cpu[a:b, 0], out_cpu[a:b, 1], out_cpu[a:b, 2], c='b', marker='o')
+                            plt.show()
+
+                        loss = (1 - w_lap) * chamfer_distance(out, tgt) + w_lap * lap
+
+                    # decrease w_lap according to the epoch
+                    # if i < 600:
+                    #     w_lap = 0.1
+                    # else:
+                    #     w_lap = 0.1 * (1 - (i - 600)/600)
+                    else:
+                        loss = (1 - w_lap) * chamfer_distance_each_row(out, target_list) + w_lap * lap
+
+                    log_value('chamfer_distance', loss, i)
+                    # log_value('laplacian_loss', lap * 10, i)
+                    # log_value('close_loss_column', close_loss_column, i)
+
+            loss.sum().backward(retain_graph=True)
+            return loss
+
+        if i % 100 < 30:
+            loss = opt1.step(closure)
+            lr_schedule1.step(loss)
+        else:
+            loss = opt2.step(closure)
+            lr_schedule2.step(loss)
+
+        out = layer((torch.cat((inp_ctrl_pts, weights), -1), torch.cat((knot_rep_p_0, knot_int_u, knot_rep_p_1), -1),
+                     torch.cat((knot_rep_q_0, knot_int_v, knot_rep_q_1), -1)))
+
+        if (i + 1) % mod_iter == 0:
+            fig = plt.figure()
+            predicted = out.detach().cpu().numpy().squeeze()
+            # ctrlpts = inp_ctrl_pts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
+            predctrlpts = inp_ctrl_pts.detach().cpu().numpy().squeeze()
+            # predctrlptsctrlpts = predctrlpts.reshape(num_ctrl_pts1, num_ctrl_pts2, 3)
+
+            ax2 = fig.add_subplot(projection='3d')
+            surf2 = ax2.plot_wireframe(predicted[:, :, 0], predicted[:, :, 1], predicted[:, :, 2], color='green',
+                                       label='Predicted Surface')
+            surf2 = ax2.plot_wireframe(predctrlpts[:, :, 0], predctrlpts[:, :, 1], predctrlpts[:, :, 2],
+                                       linestyle='dashed', color='orange', label='Predicted Control Points')
+            ax2.azim = 45
+            ax2.dist = 6.5
+            ax2.elev = 30
+            ax2.set_xticks([])
+            ax2.set_yticks([])
+            ax2.set_zticks([])
+            ax2.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+            ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+            ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+            ax2._axis3don = False
+
+            plt.show()
+
+        if loss.item() < 1e-6:
+            print((time.time() - time1) / (i + 1))
+            break
+
+        pbar.set_description("Loss %s: %s" % (i + 1, loss.item()))
+
+    print((time.time() - time1) / (num_epochs + 1))
+
+    U, V = layer.getrealUV()
+    U = U.detach().cpu().numpy().reshape(-1, 1)
+    V = V.detach().cpu().numpy().reshape(-1, 1)
+    target_mpl = target.cpu().numpy().squeeze()
+
+    predicted = out.detach().cpu().numpy().squeeze()
+
+    predictedweights = weights.detach().cpu().numpy().squeeze(0)
+    predictedctrlpts = inp_ctrl_pts.detach().cpu().numpy().squeeze()
+    # print(predictedweights.shape)
+    # print(predictedctrlpts.shape)
+    predictedknotu = knot_int_u.detach().cpu().numpy().squeeze().tolist()
+    predictedknotu = [0., 0., 0., 0., 0.] + predictedknotu + [1., 1., 1., 1.]
+    predictedknotv = knot_int_v.detach().cpu().numpy().squeeze().tolist()
+    predictedknotv = [0., 0., 0., 0., 0.] + predictedknotv + [1., 1., 1., 1.]
+
+    # Open the file in write mode
+    with open('generated/u_test.ctrlpts', 'w') as f:
+        # Loop over the array rows
+        x = predictedctrlpts
+        x = x.reshape(ctr_pts_u, ctr_pts_v, 3)
+
+        for i in range(ctr_pts_u):
+            for j in range(ctr_pts_v):
+                # print(predicted_target[i, j, :])
+                line = str(x[i, j, 0]) + ' ' + str(x[i, j, 1]) + ' ' + str(x[i, j, 2])
+                f.write(line)
+                # if (j == ctr_pts - 1):
+                f.write('\n')
+                # else:
+                #     f.write(';')
+
+    with open('generated/u_test.weights', 'w') as f:
+        # Loop over the array rows
+        x = predictedweights
+
+        for row in x:
+            # Flatten the row to a 1D array
+            row_flat = row.reshape(-1)
+            # Write the row values to the file as a string separated by spaces
+            f.write(','.join([str(x) for x in row_flat]) + '\n')
+
+    with open('generated/u_test.knotu', 'w') as f:
+        # Loop over the array rows
+        x = predictedknotu
+
+        for row in x:
+            # Flatten the row to a 1D array
+
+            # Write the row values to the file as a string separated by spaces
+            f.write(','.join([str(row)]) + '\n')
+
+    with open('generated/u_test.knotv', 'w') as f:
+        # Loop over the array rows
+        x = predictedknotv
+
+        for row in x:
+            # Flatten the row to a 1D array
+
+            # Write the row values to the file as a string separated by spaces
+            f.write(','.join([str(row)]) + '\n')
+
+    if torch.cuda.is_available():
+        layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=out_dim_u, out_dim_v=out_dim_v,
+                         method='tc', dvc='cuda').cuda()
+        knot_rep_p_0 = torch.zeros(1, p + 1).cuda()
+        knot_rep_p_1 = torch.zeros(1, p).cuda()
+        knot_rep_q_0 = torch.zeros(1, q + 1).cuda()
+        knot_rep_q_1 = torch.zeros(1, q).cuda()
+    else:
+        layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=out_dim_u, out_dim_v=out_dim_v,
+                         method='tc')
+        knot_rep_p_0 = torch.zeros(1, p + 1)
+        knot_rep_p_1 = torch.zeros(1, p)
+        knot_rep_q_0 = torch.zeros(1, q + 1)
+        knot_rep_q_1 = torch.zeros(1, q)
+
+    knots_u = torch.cat((knot_rep_p_0, knot_int_u, knot_rep_p_1), -1)
+    knots_v = torch.cat((knot_rep_q_0, knot_int_v, knot_rep_q_1), -1)
+
+    out2 = layer((torch.cat((inp_ctrl_pts, weights), -1), knots_u, knots_v))
+    out2 = out2.detach().cpu().numpy().squeeze(0).reshape(out_dim_u, out_dim_v, 3)
+    # ax4.plot_wireframe(out2[:, :, 0], out2[:, :, 1], out2[:, :, 2], color='cyan', label='Reconstructed Surface')
+    # adjust_plot(ax4)
+
+    # target_mpl = target_mpl.reshape(resolution_u, resolution_v, 3)
+    predicted = predicted.reshape(sample_size_u, sample_size_v, 3)
+
+    with open(f'generated/{object_name}/points_{ctr_pts_u}_{out_dim_u}x{out_dim_v}_{resolution_v}.OFF', 'w') as f:
+        # Loop over the array rows
+        f.write('OFF\n')
+        f.write(str(out_dim_u * out_dim_v) + ' ' + '0 0\n')
+        for i in range(out_dim_u):
+            for j in range(out_dim_v):
+                # print(predicted_target[i, j, :])
+                line = str(out2[i, j, 0]) + ' ' + str(out2[i, j, 1]) + ' ' + str(out2[i, j, 2]) + '\n'
+                f.write(line)
+
+    with open(f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}.OFF', 'w') as f:
+        # Loop over the array rows
+        f.write('OFF\n')
+        f.write(str(num_ctrl_pts1 * num_ctrl_pts2) + ' ' + '0 0\n')
+        for i in range(num_ctrl_pts1):
+            for j in range(num_ctrl_pts2):
+                line = str(predictedctrlpts[i, j, 0]) + ' ' + str(predictedctrlpts[i, j, 1]) + ' ' + str(
+                    predictedctrlpts[i, j, 2]) + '\n'
+                f.write(line)
+
+    with open(f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}', 'w') as f:
+        # Loop over the array rows
+        for i in range(num_ctrl_pts1):
+            for j in range(num_ctrl_pts2):
+                line = str(predictedctrlpts[i, j, 0]) + ' ' + str(predictedctrlpts[i, j, 1]) + ' ' + str(
+                    predictedctrlpts[i, j, 2]) + '\n'
+                f.write(line)
+
+    # write U and V in a file
+    np.save(f'generated/{object_name}/U_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}', U)
+    np.save(f'generated/{object_name}/V_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}', V)
+
+    filename_ctrpts = f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}'
+
+    U = np.load(f'generated/{object_name}/U_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}.npy')
+    V = np.load(f'generated/{object_name}/V_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}.npy')
+
+    # force the last 4 elements of and V to be 1
+    U[-4:] = 1
+    V[-4:] = 1
+    # surfpts, tangent_vectors, normal_vectors = reconstructed_mesh(object_name, filename_ctrpts, num_ctrl_pts1, num_ctrl_pts2, U, V)
+    surfpts, tangent_vectors, normal_vectors = reconstructed_mesh(object_name, filename_ctrpts, num_ctrl_pts1,
+                                                                  num_ctrl_pts2, U, V)
+    plot_tangent_normals(surfpts, tangent_vectors, normal_vectors)
+
+    pass
+
+def init_plt():
+    plt.rc('font', family='sans-serif')
+    plt.rc('font', serif='Times')
+    plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+    plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+    plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+    plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+if __name__ == '__main__':
+    init_plt()
+
+    main()
