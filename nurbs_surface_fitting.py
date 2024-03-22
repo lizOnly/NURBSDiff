@@ -9,7 +9,9 @@ from examples.test.mesh_reconstruction import reconstructed_mesh
 torch.manual_seed(120)
 from tensorboard_logger import configure, log_value
 from tqdm import tqdm
-# from pytorch3d.loss import chamfer_distance
+from pytorch3d.loss import chamfer_distance
+# git clone https://github.com/facebookresearch/pytorch3d.git
+# cd pytorch3d && pip install -e .
 from NURBSDiff.nurbs_eval import SurfEval
 
 import matplotlib.pyplot as plt
@@ -23,6 +25,13 @@ import torch.nn.functional as F
 SMALL_SIZE = 12
 MEDIUM_SIZE = 16
 BIGGER_SIZE = 20
+
+# Set the device
+if torch.cuda.is_available():
+    device = torch.device("cuda:0")
+else:
+    device = torch.device("cpu")
+    print("WARNING: CPU only, this will be slow!")
 
 
 def chamfer_distance(pred, gt, sqrt=False):
@@ -148,6 +157,18 @@ def read_irregular_file(path):
 
     return input_point_list, target_list, vertex_positions, resolution_u
 
+def plot_pointcloud(points, title=""):
+    # Sample points uniformly from the surface of the mesh.
+    x, y, z = points.clone().detach().cpu().squeeze().unbind(1)
+    fig = plt.figure(figsize=(5, 5))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter3D(x, z, -y)
+    ax.set_xlabel('x')
+    ax.set_ylabel('z')
+    ax.set_zlabel('y')
+    ax.set_title(title)
+    ax.view_init(190, 30)
+    plt.show()
 def plot_tangent_normals(surfpts, tangent_vectors, normal_vectors):
     # Start plotting of the surface and the control points grid
     fig = plt.figure()
