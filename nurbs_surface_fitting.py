@@ -211,6 +211,17 @@ def plot_tangent_normals(surfpts, tangent_vectors, normal_vectors):
 
     plt.show()
 
+def create_grid_points(res_u, res_v):
+    cp_resolution_u = res_u
+    cp_resolution_v = res_v
+
+    x = np.array([np.linspace(-1, 1, num=cp_resolution_u) for _ in range(cp_resolution_v)])
+    y = np.array([np.linspace(-1, 1, num=cp_resolution_v) for _ in range(cp_resolution_u)]).T
+
+    zs = np.ones(x.shape) * -2
+    z = zs.reshape(x.shape)
+
+    return x,y,z
 def main():
     gt_path = os.path.dirname(os.path.realpath(__file__))
     gt_path = gt_path.split("/")[0:-1]
@@ -230,9 +241,14 @@ def main():
     # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_ducky_0.003_50.txt'
     # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_ducky_0.003_20.txt'
 
+    # gt_path = gt_path + "/pygeodesics/data/sphere.obj"
+    # cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
+    # ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
+
     gt_path = gt_path + "/pygeodesics/data/sphere.obj"
-    cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
-    ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
+    cm_path = dir_path + '/data/cm_sphere_half_500.003_50.txt'
+    ctr_pts_path = dir_path + '/data/cm_sphere_half0.003_20.txt'
+
 
     # ctr_pts = 40
     # resolution_u = 64
@@ -261,11 +277,12 @@ def main():
     ctr_pts_v = 15
     resolution_v = 51
 
-    w_lap = 0.8
-    mod_iter = 1
+    w_lap = 0.1
+    mod_iter = 1000
     cglobal = 1
-    average = 1
+    average = 0
     learning_rate = 0.5
+    use_grid = True
 
     # best
     learning_rate = 0.05
@@ -285,7 +302,12 @@ def main():
     sample_size_u = resolution_u
     sample_size_v = resolution_v
 
-    cp_input_point_list, cp_target_list, cp_vertex_positions, cp_resolution_u = read_irregular_file(ctr_pts_path)
+    if use_grid!=True:
+        cp_input_point_list, cp_target_list, cp_vertex_positions, cp_resolution_u = read_irregular_file(ctr_pts_path)
+        cp_resolution_v = cp_target_list[0].shape[0]
+    else:
+        cp_resolution_u = 10
+        cp_resolution_v = 10
 
     # tgt = torch.stack(target_list)
     # tgt = tgt.reshape(-1, 3)
@@ -293,16 +315,23 @@ def main():
 
     # gt_normals = compute_normals(gt_points)
 
-    print("#input control points " + str(len(cp_input_point_list)))
+    # print("#input control points " + str(len(cp_input_point_list)))
+
+
+    create_grid_points(cp_resolution_u, cp_resolution_v)
+
 
     if torch.cuda.is_available():
-        inp_ctrl_pts = torch.tensor(cp_input_point_list).float().cuda().reshape(1, cp_resolution_u, cp_resolution_u,
-                                                                                3).cuda()
+        # inp_ctrl_pts = torch.tensor(cp_input_point_list).float().cuda().reshape(1, cp_resolution_u, cp_resolution_v,
+        #                                                                         3).cuda()
+        if use_grid:
+            x , y, z = create_grid_points(cp_resolution_u, cp_resolution_v)
+            inp_ctrl_pts = torch.from_numpy(np.array([x, y, z])).permute(1, 2, 0).unsqueeze(0).contiguous().float().cuda()
     else:
         inp_ctrl_pts = torch.tensor(cp_input_point_list).float().reshape(1, cp_resolution_u, cp_resolution_u, 3)
 
     ctr_pts_u = cp_resolution_u
-    ctr_pts_v = cp_resolution_u
+    ctr_pts_v = cp_resolution_v
 
     num_ctrl_pts1 = ctr_pts_u
     num_ctrl_pts2 = ctr_pts_v

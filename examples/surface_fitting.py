@@ -5,7 +5,7 @@ import random
 from tqdm import tqdm
 from NURBSDiff.nurbs_eval import SurfEval
 from NURBSDiff.utils import gen_knot_vector
-import offset_eval as off
+# import offset_eval as off
 import matplotlib
 # font = {'family': 'serif',
 #         'weight': 'normal',

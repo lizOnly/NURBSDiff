@@ -862,7 +862,7 @@ def main():
     resolution_v = 51
 
     w_lap = 0.8
-    mod_iter = 1000
+    mod_iter = 1
     cglobal = 1
     average = 1
     learning_rate = 0.5
@@ -1001,7 +1001,7 @@ def main():
             loss = 0
 
             # get the normals
-            # surfpts, normals = get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer)
+            surfpts, normals = get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer)
 
             if ignore_uv:
                 lap = laplacian_loss_unsupervised(inp_ctrl_pts)
@@ -1027,9 +1027,12 @@ def main():
                             # b = 153
                             a = 0
                             b = -1
+
                             ax.scatter(tgt_cpu[a:b, 0], tgt_cpu[a:b, 1], tgt_cpu[a:b, 2], c='r', marker='o')
                             ax.scatter(out_cpu[a:b, 0], out_cpu[a:b, 1], out_cpu[a:b, 2], c='b', marker='o')
+                            ax.scatter(normals[a:b, 0, 0], normals[a:b, 0, 1], normals[a:b, 0, 2], c='green', marker='o')
                             plt.show()
+                        tgt_cpu = tgt.detach().cpu().numpy().squeeze()
 
                         loss = (1-w_lap) * chamfer_distance(out, tgt) + w_lap * lap
 
