@@ -34,7 +34,7 @@ else:
     print("WARNING: CPU only, this will be slow!")
 
 
-def chamfer_distance(pred, gt, sqrt=False):
+def chamfer_distance_corr(pred, gt, sqrt=False):
     """
     Computes average chamfer distance prediction and groundtruth
     :param pred: Prediction: M x N x 3
@@ -306,8 +306,8 @@ def main():
         cp_input_point_list, cp_target_list, cp_vertex_positions, cp_resolution_u = read_irregular_file(ctr_pts_path)
         cp_resolution_v = cp_target_list[0].shape[0]
     else:
-        cp_resolution_u = 10
-        cp_resolution_v = 10
+        cp_resolution_u = 6
+        cp_resolution_v = 6
 
     # tgt = torch.stack(target_list)
     # tgt = tgt.reshape(-1, 3)
@@ -475,7 +475,9 @@ def main():
                             ax.scatter(out_cpu[a:b, 0], out_cpu[a:b, 1], out_cpu[a:b, 2], c='b', marker='o')
                             plt.show()
 
-                        loss = (1 - w_lap) * chamfer_distance(out, tgt) + w_lap * lap
+                        loss_chamfer, _ = chamfer_distance(out, tgt)
+                        loss = (1 - w_lap) * loss_chamfer + w_lap * lap
+
 
                     # decrease w_lap according to the epoch
                     # if i < 600:
