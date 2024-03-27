@@ -241,13 +241,13 @@ def main():
     # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_ducky_0.003_50.txt'
     # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_ducky_0.003_20.txt'
 
-    gt_path = gt_path + "/pygeodesics/data/sphere.obj"
-    cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
-    ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
-
     # gt_path = gt_path + "/pygeodesics/data/sphere.obj"
-    # cm_path = dir_path + '/data/cm_sphere_half_500.003_50.txt'
-    # ctr_pts_path = dir_path + '/data/cm_sphere_half0.003_20.txt'
+    # cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
+    # ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
+
+    gt_path = gt_path + "/pygeodesics/data/sphere.obj"
+    cm_path = dir_path + '/data/cm_sphere_half_500.003_50.txt'
+    ctr_pts_path = dir_path + '/data/cm_sphere_half0.003_20.txt'
 
 
     # ctr_pts = 40
@@ -277,12 +277,14 @@ def main():
     ctr_pts_v = 15
     resolution_v = 51
 
-    w_lap = 0.8
+    w_lap = 0.1
     mod_iter = 100
     cglobal = 1
     average = 0
     learning_rate = 0.5
-    use_grid = False
+    use_grid = True
+    n_ctrpts = 15
+
 
     # best
     learning_rate = 0.05
@@ -302,12 +304,12 @@ def main():
     sample_size_u = resolution_u
     sample_size_v = resolution_v
 
-    if use_grid!=True:
+    if use_grid == False:
         cp_input_point_list, cp_target_list, cp_vertex_positions, cp_resolution_u = read_irregular_file(ctr_pts_path)
         cp_resolution_v = cp_target_list[0].shape[0]
     else:
-        cp_resolution_u = 6
-        cp_resolution_v = 6
+        cp_resolution_u = n_ctrpts
+        cp_resolution_v = n_ctrpts
 
     # tgt = torch.stack(target_list)
     # tgt = tgt.reshape(-1, 3)
@@ -618,10 +620,7 @@ def main():
 
     out2 = layer((torch.cat((inp_ctrl_pts, weights), -1), knots_u, knots_v))
     out2 = out2.detach().cpu().numpy().squeeze(0).reshape(out_dim_u, out_dim_v, 3)
-    # ax4.plot_wireframe(out2[:, :, 0], out2[:, :, 1], out2[:, :, 2], color='cyan', label='Reconstructed Surface')
-    # adjust_plot(ax4)
 
-    # target_mpl = target_mpl.reshape(resolution_u, resolution_v, 3)
     predicted = predicted.reshape(sample_size_u, sample_size_v, 3)
 
     with open(f'generated/{object_name}/points_{ctr_pts_u}_{out_dim_u}x{out_dim_v}_{resolution_v}.OFF', 'w') as f:
