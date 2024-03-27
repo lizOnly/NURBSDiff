@@ -300,21 +300,29 @@ def main():
     ctr_pts_v = 15
     resolution_v = 51 # samples in the v directions columns per curve points
 
-    w_lap = 0.1
+    w_lap = 0
     w_chamfer = 1
     w_edge = 1.0
     w_normal = 0.01
 
-    mod_iter = 100
+    mod_iter = 1000
     cglobal = 1
     average = 0
     learning_rate = 0.5
     use_grid = True
+
+    use_mesh_losses = True
     n_ctrpts = 6
 
 
     # best
     learning_rate = 0.05
+
+    chamfer_losses = []
+    laplacian_losses = []
+    edge_losses = []
+    normal_losses = []
+
 
     input_point_list, target_list, vertex_positions, resolution_u = read_irregular_file(cm_path)
 
@@ -352,8 +360,8 @@ def main():
             create_grid_points(cp_resolution_u, cp_resolution_v)
             x , y, z = create_grid_points(cp_resolution_u, cp_resolution_v)
             inp_ctrl_pts = torch.from_numpy(np.array([x, y, z])).permute(1, 2, 0).unsqueeze(0).contiguous().float().cuda()
-
-            new_ctrl_mesh = create_mesh_from_grid(inp_ctrl_pts)
+            if use_mesh_losses:
+                new_ctrl_mesh = create_mesh_from_grid(inp_ctrl_pts)
         else:
             inp_ctrl_pts = torch.tensor(cp_input_point_list).float().cuda().reshape(1, cp_resolution_u, cp_resolution_v, 3).cuda()
 
@@ -499,17 +507,26 @@ def main():
                             ax.scatter(out_cpu[a:b, 0], out_cpu[a:b, 1], out_cpu[a:b, 2], c='b', marker='o')
                             plt.show()
 
-                        # update new_ctrl_mesh points with learned points from inp_ctrl_pts
-                        new_ctrl_mesh.verts_list()[0] = inp_ctrl_pts.squeeze().reshape(-1,3)
-
                         loss_chamfer, _ = chamfer_distance(out, tgt)
-                        loss = w_chamfer * loss_chamfer + w_lap * lap
 
-                        # loss_laplacian = mesh_laplacian_smoothing(new_ctrl_mesh, method="uniform")
-                        # loss_edge = mesh_edge_loss(new_ctrl_mesh)
-                        # loss_normal = mesh_normal_consistency(new_ctrl_mesh)
-                        #
-                        # loss = w_chamfer * loss_chamfer + w_lap * loss_laplacian + loss_edge * w_edge + loss_normal * w_normal
+                        if use_mesh_losses == True:
+                            new_ctrl_mesh.offset_verts(
+                                new_ctrl_mesh.verts_packed() - inp_ctrl_pts.squeeze().reshape(-1, 3))
+                            loss_laplacian = mesh_laplacian_smoothing(new_ctrl_mesh, method="uniform")
+                            loss_edge = mesh_edge_loss(new_ctrl_mesh)
+                            loss_normal = mesh_normal_consistency(new_ctrl_mesh)
+
+                            loss = w_chamfer * loss_chamfer + w_lap * loss_laplacian + loss_edge * w_edge + loss_normal * w_normal
+
+                            # Save the losses for plotting
+                            chamfer_losses.append(float(loss_chamfer.detach().cpu()))
+                            edge_losses.append(float(loss_edge.detach().cpu()))
+                            normal_losses.append(float(loss_normal.detach().cpu()))
+                            laplacian_losses.append(float(loss_laplacian.detach().cpu()))
+
+                        else:
+                            loss = w_chamfer * loss_chamfer + w_lap * lap
+
 
                     # decrease w_lap according to the epoch
                     # if i < 600:
@@ -560,6 +577,8 @@ def main():
             ax2._axis3don = False
 
             plt.show()
+
+            show_losses(chamfer_losses, edge_losses, normal_losses, laplacian_losses)
 
         if loss.item() < 1e-6:
             print((time.time() - time1) / (i + 1))
@@ -700,7 +719,18 @@ def main():
     plot_tangent_normals(surfpts, tangent_vectors, normal_vectors)
 
     pass
-
+def show_losses(chamfer_losses, edge_losses, normal_losses, laplacian_losses):
+    fig = plt.figure(figsize=(13, 5))
+    ax = fig.gca()
+    ax.plot(chamfer_losses, label="chamfer loss")
+    ax.plot(edge_losses, label="edge loss")
+    ax.plot(normal_losses, label="normal loss")
+    ax.plot(laplacian_losses, label="laplacian loss")
+    ax.legend(fontsize="16")
+    ax.set_xlabel("Iteration", fontsize="16")
+    ax.set_ylabel("Loss", fontsize="16")
+    ax.set_title("Loss vs iterations", fontsize="16")
+    plt.show()
 def init_plt():
     plt.rc('font', family='sans-serif')
     plt.rc('font', serif='Times')
