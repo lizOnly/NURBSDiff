@@ -292,26 +292,21 @@ def main():
 
     configure("logs/tensorboard/{}".format(f'{object_name}_irregular_input/{current_time}'), flush_secs=2)
 
-    # ducky parameters
-
     out_dim_u = 250
     out_dim_v = 250
-    ctr_pts_u = 15
-    ctr_pts_v = 15
     resolution_v = 51 # samples in the v directions columns per curve points
 
-    w_lap = 0
-    w_chamfer = 1
-    w_edge = 1.0
+    w_lap = 0.1
+    w_chamfer = 0.5
+    w_edge = 0
     w_normal = 0.01
 
-    mod_iter = 1000
+    mod_iter = 300
     cglobal = 1
     average = 0
-    learning_rate = 0.5
     use_grid = True
 
-    use_mesh_losses = True
+    use_mesh_losses = False
     n_ctrpts = 6
 
 
@@ -577,8 +572,8 @@ def main():
             ax2._axis3don = False
 
             plt.show()
-
-            show_losses(chamfer_losses, edge_losses, normal_losses, laplacian_losses)
+            if use_mesh_losses == True:
+                show_losses(chamfer_losses, edge_losses, normal_losses, laplacian_losses)
 
         if loss.item() < 1e-6:
             print((time.time() - time1) / (i + 1))
