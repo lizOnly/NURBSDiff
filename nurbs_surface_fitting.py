@@ -9,7 +9,14 @@ from examples.test.mesh_reconstruction import reconstructed_mesh
 torch.manual_seed(120)
 from tensorboard_logger import configure, log_value
 from tqdm import tqdm
-from pytorch3d.loss import chamfer_distance
+
+from pytorch3d.structures import Meshes
+from pytorch3d.loss import (
+    chamfer_distance,
+    mesh_edge_loss,
+    mesh_laplacian_smoothing,
+    mesh_normal_consistency,
+)
 # git clone https://github.com/facebookresearch/pytorch3d.git
 # cd pytorch3d && pip install -e .
 from NURBSDiff.nurbs_eval import SurfEval
@@ -222,6 +229,22 @@ def create_grid_points(res_u, res_v):
     z = zs.reshape(x.shape)
 
     return x,y,z
+
+def create_mesh_from_grid(grid_points):
+    grid_points
+    verts = grid_points.reshape(-1, 3)
+    faces_idx = []
+    for i in range(0, grid_points.shape[1]-1):
+        for j in range(0, grid_points.shape[2]-1):
+            faces_idx.append([i * grid_points.shape[2] + j, i * grid_points.shape[2] + j + 1,
+                                (i + 1) * grid_points.shape[2] + j + 1])
+            faces_idx.append([i * grid_points.shape[2] + j, (i + 1) * grid_points.shape[2] + j + 1,
+                                (i + 1) * grid_points.shape[2] + j])
+
+    #create a torch in32 tensor for  the faces
+    faces_idx = torch.tensor(faces_idx, dtype=torch.int32).cuda()
+    trg_mesh = Meshes(verts=[verts], faces=[faces_idx])
+    return trg_mesh
 def main():
     gt_path = os.path.dirname(os.path.realpath(__file__))
     gt_path = gt_path.split("/")[0:-1]
@@ -275,15 +298,19 @@ def main():
     out_dim_v = 250
     ctr_pts_u = 15
     ctr_pts_v = 15
-    resolution_v = 51
+    resolution_v = 51 # samples in the v directions columns per curve points
 
     w_lap = 0.1
+    w_chamfer = 1
+    w_edge = 1.0
+    w_normal = 0.01
+
     mod_iter = 100
     cglobal = 1
     average = 0
     learning_rate = 0.5
     use_grid = True
-    n_ctrpts = 15
+    n_ctrpts = 6
 
 
     # best
@@ -325,6 +352,8 @@ def main():
             create_grid_points(cp_resolution_u, cp_resolution_v)
             x , y, z = create_grid_points(cp_resolution_u, cp_resolution_v)
             inp_ctrl_pts = torch.from_numpy(np.array([x, y, z])).permute(1, 2, 0).unsqueeze(0).contiguous().float().cuda()
+
+            new_ctrl_mesh = create_mesh_from_grid(inp_ctrl_pts)
         else:
             inp_ctrl_pts = torch.tensor(cp_input_point_list).float().cuda().reshape(1, cp_resolution_u, cp_resolution_v, 3).cuda()
 
@@ -340,12 +369,6 @@ def main():
     inp_ctrl_pts.requires_grad = True
     n_knots_u = num_ctrl_pts1 + p + 1 - 2 * p - 1
     n_knots_v = num_ctrl_pts2 + q + 1 - 2 * q - 1
-
-    # change knots to uniform 0 1
-    # knots_u = (torch.range(0.01, n_knots_u)/n_knots_u)
-    # knots_u[-1] = 1
-    # knots_v = (torch.range(0.01, n_knots_u)/n_knots_v)
-    # knots_v[-1] = 1
 
     # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
     if torch.cuda.is_available():
@@ -476,9 +499,17 @@ def main():
                             ax.scatter(out_cpu[a:b, 0], out_cpu[a:b, 1], out_cpu[a:b, 2], c='b', marker='o')
                             plt.show()
 
-                        loss_chamfer, _ = chamfer_distance(out, tgt)
-                        loss = (1 - w_lap) * loss_chamfer + w_lap * lap
+                        # update new_ctrl_mesh points with learned points from inp_ctrl_pts
+                        new_ctrl_mesh.verts_list()[0] = inp_ctrl_pts.squeeze().reshape(-1,3)
 
+                        loss_chamfer, _ = chamfer_distance(out, tgt)
+                        loss = w_chamfer * loss_chamfer + w_lap * lap
+
+                        # loss_laplacian = mesh_laplacian_smoothing(new_ctrl_mesh, method="uniform")
+                        # loss_edge = mesh_edge_loss(new_ctrl_mesh)
+                        # loss_normal = mesh_normal_consistency(new_ctrl_mesh)
+                        #
+                        # loss = w_chamfer * loss_chamfer + w_lap * loss_laplacian + loss_edge * w_edge + loss_normal * w_normal
 
                     # decrease w_lap according to the epoch
                     # if i < 600:
