@@ -3,12 +3,16 @@ import time
 import torch
 import numpy as np
 import os
+from geomdl import NURBS
+from geomdl import operations
 
 from examples.test.mesh_reconstruction import reconstructed_mesh
 
 torch.manual_seed(120)
 from tensorboard_logger import configure, log_value
 from tqdm import tqdm
+import itertools
+from pytorch3d.structures import Pointclouds
 
 from pytorch3d.structures import Meshes
 from pytorch3d.loss import (
@@ -245,6 +249,58 @@ def create_mesh_from_grid(grid_points):
     faces_idx = torch.tensor(faces_idx, dtype=torch.int32).cuda()
     trg_mesh = Meshes(verts=[verts], faces=[faces_idx])
     return trg_mesh
+
+def get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer):
+    predictedweights = weights.detach().cpu().numpy().squeeze(0)
+    predictedctrlpts = inp_ctrl_pts.detach().cpu().numpy().squeeze()
+
+    # predictedknotu = knot_int_u.detach().cpu().numpy().squeeze().tolist()
+    # predictedknotu = [0., 0., 0., 0., 0.] + predictedknotu + [1., 1., 1., 1.]
+    # predictedknotv = knot_int_v.detach().cpu().numpy().squeeze().tolist()
+    # predictedknotv = [0., 0., 0., 0., 0.] + predictedknotv + [1., 1., 1., 1.]
+
+    surf = NURBS.Surface()
+    # Set degrees
+    surf.degree_u = 3
+    surf.degree_v = 3
+
+    surf.ctrlpts_size_u = num_ctrl_pts1
+    surf.ctrlpts_size_v = num_ctrl_pts2
+
+    # reshape predictedctrlpts to a list
+    predictedctrlpts = predictedctrlpts.reshape(num_ctrl_pts1 * num_ctrl_pts2, 3)
+    surf.ctrlpts = predictedctrlpts
+    predictedweights = predictedweights.reshape(num_ctrl_pts1 * num_ctrl_pts2, 1)
+    # surf.weights = predictedweights
+
+    U, V = layer.getrealUV()
+    U = U.detach().cpu().numpy().reshape(-1, 1)
+    V = V.detach().cpu().numpy().reshape(-1, 1)
+
+    # Set knot vectors
+    surf.knotvector_u = list(U)
+    surf.knotvector_v = list(V)
+
+    u_span, v_span = layer.get_spanned_uv()
+    u_span = u_span.detach().cpu().numpy().astype(float)
+    v_span = v_span.detach().cpu().numpy().astype(float)
+    # uv_vals = list(itertools.product(u, v))
+    surfnorms = [[] for _ in range(len(u_span) * len(v_span))]
+    idx = 0
+
+    cross = list(itertools.product(u_span, v_span))
+
+
+    for u, v in list(itertools.product(u_span, v_span)):
+        surfnorms[idx] = operations.normal(surf, [u, v], normalize=True)
+        idx += 1
+
+    surfpts = np.array(surf.evalpts)
+    normal_vectors = np.array(surfnorms)
+
+    return  surfpts, normal_vectors
+
+
 def main():
     gt_path = os.path.dirname(os.path.realpath(__file__))
     gt_path = gt_path.split("/")[0:-1]
@@ -297,14 +353,15 @@ def main():
     resolution_v = 51 # samples in the v directions columns per curve points
 
     w_lap = 0.1
-    w_chamfer = 0.5
-    w_edge = 0
+    w_chamfer = 1
+    w_edge = 1
     w_normal = 0.01
 
-    mod_iter = 300
+    mod_iter = 500
     cglobal = 1
     average = 0
     use_grid = True
+    show_normals = False
 
     use_mesh_losses = False
     n_ctrpts = 6
@@ -323,13 +380,18 @@ def main():
 
     print("#input points " + str(len(input_point_list)))
 
-    if torch.cuda.is_available():
-        target = torch.tensor(vertex_positions).float().cuda()
-    else:
-        target = torch.tensor(vertex_positions).float()
+    # if torch.cuda.is_available():
+    #     target = torch.tensor(vertex_positions).float().cuda()
+    # else:
+    #     target = torch.tensor(vertex_positions).float()
+    #
+    # print(target.shape)
+    # target_list.append(target)
+    #create a torch tensor from input_point_list
+    target_vert = torch.tensor(input_point_list).float().cuda()
 
-    print(target.shape)
-    target_list.append(target)
+    point_cloud = Pointclouds(points=[target_vert])
+    gt_normals = point_cloud.estimate_normals(6)
 
     sample_size_u = resolution_u
     sample_size_v = resolution_v
@@ -370,8 +432,8 @@ def main():
     num_ctrl_pts2 = ctr_pts_v
 
     inp_ctrl_pts.requires_grad = True
-    n_knots_u = num_ctrl_pts1 + p + 1 - 2 * p - 1
-    n_knots_v = num_ctrl_pts2 + q + 1 - 2 * q - 1
+    # n_knots_u = num_ctrl_pts1 + p + 1 - 2 * p - 1
+    # n_knots_v = num_ctrl_pts2 + q + 1 - 2 * q - 1
 
     # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
     if torch.cuda.is_available():
@@ -472,7 +534,11 @@ def main():
             loss = 0
 
             # get the normals
-            # surfpts, normals = get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer)
+            surfpts, out_normals_points = get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer)
+            out_normals = out_normals_points[:, 1]
+            #create a tensor with out_normals
+            out_normals = torch.tensor(out_normals).float().cuda().unsqueeze(0)
+
 
             if ignore_uv:
                 lap = laplacian_loss_unsupervised(inp_ctrl_pts)
@@ -482,15 +548,25 @@ def main():
                     # if global loss
 
                     if cglobal == True:
-                        # loss = chamfer_distance(out_knn, input_ctrl_pts_knn)
-                        tgt = torch.stack(target_list)
-                        tgt = tgt.reshape(-1, 3).unsqueeze(0)
+
+                        # tgt = torch.stack(target_list)
+                        # tgt = tgt.reshape(-1, 3).unsqueeze(0)
+                        tgt = torch.tensor(target_vert).float().cuda().unsqueeze(0)
                         out = out.reshape(1, sample_size_u * sample_size_v, 3)
+
+
 
                         if (i + 1) % mod_iter == 0:
                             # copy tgt to host
-                            tgt_cpu = tgt.detach().cpu().numpy().squeeze()
+                            tgt_cpu = target_vert.detach().cpu().numpy().squeeze()
                             out_cpu = out.detach().cpu().numpy().squeeze()
+
+                            gt_normals_cpu = gt_normals.detach().cpu().numpy().squeeze()
+                            gt_normals_cpu = np.stack((tgt_cpu, gt_normals_cpu), axis=1)
+
+                            out_normals_cpu = out_normals.detach().cpu().numpy().squeeze()
+                            out_normals_cpu = np.stack((out_cpu, out_normals_cpu), axis=1)
+
                             # visualize tgt and out
                             fig = plt.figure()
                             ax = fig.add_subplot(projection='3d')
@@ -500,9 +576,20 @@ def main():
                             b = -1
                             ax.scatter(tgt_cpu[a:b, 0], tgt_cpu[a:b, 1], tgt_cpu[a:b, 2], c='r', marker='o')
                             ax.scatter(out_cpu[a:b, 0], out_cpu[a:b, 1], out_cpu[a:b, 2], c='b', marker='o')
+
+                            if show_normals == True:
+                                ax.quiver(gt_normals_cpu[:, 0, 0], gt_normals_cpu[:, 0, 1], gt_normals_cpu[:, 0, 2],
+                                          gt_normals_cpu[:, 1, 0], gt_normals_cpu[:, 1, 1], gt_normals_cpu[:, 1, 2],
+                                          color='green', length=0.35)
+
+                                ax.quiver(out_normals_cpu[:, 0, 0], out_normals_cpu[:, 0, 1], out_normals_cpu[:, 0, 2],
+                                          out_normals_cpu[:, 1, 0], out_normals_cpu[:, 1, 1], out_normals_cpu[:, 1, 2],
+                                          color='black', length=0.35)
+
+
                             plt.show()
 
-                        loss_chamfer, _ = chamfer_distance(out, tgt)
+                        loss_chamfer, _ = chamfer_distance(out, tgt, x_normals=out_normals, y_normals=gt_normals)
 
                         if use_mesh_losses == True:
                             new_ctrl_mesh.offset_verts(
@@ -514,7 +601,7 @@ def main():
                             loss = w_chamfer * loss_chamfer + w_lap * loss_laplacian + loss_edge * w_edge + loss_normal * w_normal
 
                             # Save the losses for plotting
-                            chamfer_losses.append(float(loss_chamfer.detach().cpu()))
+                            chamfer_losses.append(0.1 * float(loss_chamfer.detach().cpu()))
                             edge_losses.append(float(loss_edge.detach().cpu()))
                             normal_losses.append(float(loss_normal.detach().cpu()))
                             laplacian_losses.append(float(loss_laplacian.detach().cpu()))
@@ -586,7 +673,6 @@ def main():
     U, V = layer.getrealUV()
     U = U.detach().cpu().numpy().reshape(-1, 1)
     V = V.detach().cpu().numpy().reshape(-1, 1)
-    target_mpl = target.cpu().numpy().squeeze()
 
     predicted = out.detach().cpu().numpy().squeeze()
 
