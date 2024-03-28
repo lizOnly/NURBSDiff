@@ -353,15 +353,17 @@ def main():
     resolution_v = 51 # samples in the v directions columns per curve points
 
     w_lap = 0.1
-    w_chamfer = 1
+    w_chamfer = 0.5
+    w_normals = 1
+
     w_edge = 1
     w_normal = 0.01
 
-    mod_iter = 500
+    mod_iter = 1000
     cglobal = 1
     average = 0
     use_grid = True
-    show_normals = False
+    show_normals = True
 
     use_mesh_losses = False
     n_ctrpts = 6
@@ -391,7 +393,7 @@ def main():
     target_vert = torch.tensor(input_point_list).float().cuda()
 
     point_cloud = Pointclouds(points=[target_vert])
-    gt_normals = point_cloud.estimate_normals(6)
+    gt_normals = point_cloud.estimate_normals(16)
 
     sample_size_u = resolution_u
     sample_size_v = resolution_v
@@ -580,16 +582,16 @@ def main():
                             if show_normals == True:
                                 ax.quiver(gt_normals_cpu[:, 0, 0], gt_normals_cpu[:, 0, 1], gt_normals_cpu[:, 0, 2],
                                           gt_normals_cpu[:, 1, 0], gt_normals_cpu[:, 1, 1], gt_normals_cpu[:, 1, 2],
-                                          color='green', length=0.35)
+                                          color='green', length=0.15)
 
                                 ax.quiver(out_normals_cpu[:, 0, 0], out_normals_cpu[:, 0, 1], out_normals_cpu[:, 0, 2],
                                           out_normals_cpu[:, 1, 0], out_normals_cpu[:, 1, 1], out_normals_cpu[:, 1, 2],
-                                          color='black', length=0.35)
+                                          color='black', length=0.15)
 
 
                             plt.show()
 
-                        loss_chamfer, _ = chamfer_distance(out, tgt, x_normals=out_normals, y_normals=gt_normals)
+                        loss_chamfer, loss_normals = chamfer_distance(out, tgt, x_normals=out_normals, y_normals=gt_normals)
 
                         if use_mesh_losses == True:
                             new_ctrl_mesh.offset_verts(
@@ -607,7 +609,7 @@ def main():
                             laplacian_losses.append(float(loss_laplacian.detach().cpu()))
 
                         else:
-                            loss = w_chamfer * loss_chamfer + w_lap * lap
+                            loss = w_chamfer * loss_chamfer + w_lap * lap + w_normals * loss_normals
 
 
                     # decrease w_lap according to the epoch
