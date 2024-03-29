@@ -316,9 +316,9 @@ def main():
     # cm_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_0.025_20.txt'
     # ctr_pts_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_uniform_warp_offset_0.003_20.txt'
 
-    # gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/duck_clean.obj"
-    # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_ducky_0.003_50.txt'
-    # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_ducky_0.003_20.txt'
+    # gt_path = gt_path + "/data/duck_clean.obj"
+    # cm_path =  dir_path + '/data/cm_ducky_0.003_50.txt'
+    # ctr_pts_path =  dir_path + '/data/cm_ducky_0.003_20.txt'
 
     # gt_path = gt_path + "/pygeodesics/data/sphere.obj"
     # cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
@@ -352,17 +352,17 @@ def main():
     out_dim_v = 250
     resolution_v = 51 # samples in the v directions columns per curve points
 
-    w_lap = 0.1
-    w_chamfer = 0.5
-    w_normals = 1
+    w_lap = 0.5
+    w_chamfer = 1
+    w_normals = 0
 
     w_edge = 1
-    w_normal = 0.01
+    w_normal = 0
 
     mod_iter = 1000
     cglobal = 1
     average = 0
-    use_grid = True
+    use_grid = False
     show_normals = True
 
     use_mesh_losses = False
@@ -405,13 +405,6 @@ def main():
         cp_resolution_u = n_ctrpts
         cp_resolution_v = n_ctrpts
 
-    # tgt = torch.stack(target_list)
-    # tgt = tgt.reshape(-1, 3)
-    # gt_points = tgt.detach().cpu().numpy()
-
-    # gt_normals = compute_normals(gt_points)
-
-    # print("#input control points " + str(len(cp_input_point_list)))
 
 
     if torch.cuda.is_available():
@@ -434,10 +427,7 @@ def main():
     num_ctrl_pts2 = ctr_pts_v
 
     inp_ctrl_pts.requires_grad = True
-    # n_knots_u = num_ctrl_pts1 + p + 1 - 2 * p - 1
-    # n_knots_v = num_ctrl_pts2 + q + 1 - 2 * q - 1
 
-    # inp_ctrl_pts = torch.rand((1, num_ctrl_pts1, num_ctrl_pts2, 3), requires_grad=False).float().cuda()
     if torch.cuda.is_available():
         knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 - p).unsqueeze(0).cuda(), requires_grad=True)
         knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2 - q).unsqueeze(0).cuda(), requires_grad=True)
@@ -447,8 +437,6 @@ def main():
 
     else:
         knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 - p).unsqueeze(0), requires_grad=True)
-        # knot_int_u = torch.nn.Parameter(knots_u.unsqueeze(0).cuda(), requires_grad=True)
-        # knot_int_u = torch.nn.Parameter(torch.cat((torch.ones(num_ctrl_pts1 - p - 3), torch.zeros(3)), dim=0).unsqueeze(0).cuda(), requires_grad=True)
         knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2 - q).unsqueeze(0), requires_grad=True)
         # knot_int_v = torch.nn.Parameter(knots_v.unsqueeze(0).cuda(), requires_grad=True)
         weights = torch.nn.Parameter(torch.ones(1, num_ctrl_pts1, num_ctrl_pts2, 1).float(), requires_grad=True)
@@ -536,10 +524,12 @@ def main():
             loss = 0
 
             # get the normals
-            surfpts, out_normals_points = get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer)
-            out_normals = out_normals_points[:, 1]
-            #create a tensor with out_normals
-            out_normals = torch.tensor(out_normals).float().cuda().unsqueeze(0)
+
+            if w_normals > 0:
+                surfpts, out_normals_points = get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer)
+                out_normals = out_normals_points[:, 1]
+                #create a tensor with out_normals
+                out_normals = torch.tensor(out_normals).float().cuda().unsqueeze(0)
 
 
             if ignore_uv:
@@ -566,8 +556,9 @@ def main():
                             gt_normals_cpu = gt_normals.detach().cpu().numpy().squeeze()
                             gt_normals_cpu = np.stack((tgt_cpu, gt_normals_cpu), axis=1)
 
-                            out_normals_cpu = out_normals.detach().cpu().numpy().squeeze()
-                            out_normals_cpu = np.stack((out_cpu, out_normals_cpu), axis=1)
+                            if w_normals > 0:
+                                out_normals_cpu = out_normals.detach().cpu().numpy().squeeze()
+                                out_normals_cpu = np.stack((out_cpu, out_normals_cpu), axis=1)
 
                             # visualize tgt and out
                             fig = plt.figure()
@@ -583,15 +574,17 @@ def main():
                                 ax.quiver(gt_normals_cpu[:, 0, 0], gt_normals_cpu[:, 0, 1], gt_normals_cpu[:, 0, 2],
                                           gt_normals_cpu[:, 1, 0], gt_normals_cpu[:, 1, 1], gt_normals_cpu[:, 1, 2],
                                           color='green', length=0.15)
-
-                                ax.quiver(out_normals_cpu[:, 0, 0], out_normals_cpu[:, 0, 1], out_normals_cpu[:, 0, 2],
-                                          out_normals_cpu[:, 1, 0], out_normals_cpu[:, 1, 1], out_normals_cpu[:, 1, 2],
-                                          color='black', length=0.15)
+                                if w_normals > 0:
+                                    ax.quiver(out_normals_cpu[:, 0, 0], out_normals_cpu[:, 0, 1], out_normals_cpu[:, 0, 2],
+                                              out_normals_cpu[:, 1, 0], out_normals_cpu[:, 1, 1], out_normals_cpu[:, 1, 2],
+                                              color='black', length=0.15)
 
 
                             plt.show()
-
-                        loss_chamfer, loss_normals = chamfer_distance(out, tgt, x_normals=out_normals, y_normals=gt_normals)
+                        if w_normals > 0:
+                            loss_chamfer, loss_normals = chamfer_distance(out, tgt, x_normals=out_normals, y_normals=gt_normals)
+                        else:
+                            loss_chamfer, _ = chamfer_distance(out, tgt)
 
                         if use_mesh_losses == True:
                             new_ctrl_mesh.offset_verts(
@@ -609,7 +602,10 @@ def main():
                             laplacian_losses.append(float(loss_laplacian.detach().cpu()))
 
                         else:
-                            loss = w_chamfer * loss_chamfer + w_lap * lap + w_normals * loss_normals
+                            if w_normals > 0:
+                                loss = w_chamfer * loss_chamfer + w_lap * lap + w_normals * loss_normals
+                            else:
+                                loss = w_chamfer * loss_chamfer + w_lap * lap
 
 
                     # decrease w_lap according to the epoch
