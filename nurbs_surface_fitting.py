@@ -302,6 +302,14 @@ def get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer):
     return  surfpts, normal_vectors
 
 
+def get_grid_init_points_patches(ctrlpts, k, s):
+    #get control poitns shape as u and v
+    u = ctrlpts.shape[1]
+    v = ctrlpts.shape[2]
+    # get the list of indices (i,j) for the convlution using k as kernel size and s as stride
+    indices = [(i, j) for i in range(0, u - k + 1, s) for j in range(0, v - k + 1, s)]
+
+    return indices
 def main():
     gt_path = os.path.dirname(os.path.realpath(__file__))
     gt_path = gt_path.split("/")[0:-1]
@@ -339,7 +347,7 @@ def main():
 
     num_epochs = 2000
     loss_type = "chamfer"
-    ignore_uv = True
+
     axis = "y"
 
     def get_current_time():
@@ -368,12 +376,18 @@ def main():
 
     n_ctrpts = 6
 
+    k = 6 # kernel size
+    s = 2 # stride
+    n_iter_patch = 20
+    idx_patch = 0
+
     # best
     learning_rate = 0.05
 
     chamfer_losses = []
     laplacian_losses = []
     normal_losses = []
+
 
 
     input_point_list, target_list, vertex_positions, resolution_u = read_irregular_file(cm_path)
@@ -436,6 +450,10 @@ def main():
     num_ctrl_pts2 = ctr_pts_v
 
     inp_ctrl_pts.requires_grad = True
+
+    #used only when masking out the control points
+    indices = get_grid_init_points_patches(inp_ctrl_pts, k, s)
+    mask = torch.ones(inp_ctrl_pts.shape).cuda()
 
     if torch.cuda.is_available():
         knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 - p).unsqueeze(0).cuda(), requires_grad=True)
@@ -541,79 +559,78 @@ def main():
                 out_normals = torch.tensor(out_normals).float().cuda().unsqueeze(0)
 
 
-            if ignore_uv:
-                loss_laplacian = laplacian_loss_unsupervised(inp_ctrl_pts)
-                out = out.reshape(sample_size_u, sample_size_v, 3)
+            loss_laplacian = laplacian_loss_unsupervised(inp_ctrl_pts)
+            out = out.reshape(sample_size_u, sample_size_v, 3)
 
-                if loss_type == 'chamfer':
-                    # if global loss
+            if loss_type == 'chamfer':
+                # if global loss
 
-                    if cglobal == True:
+                if cglobal == True:
 
-                        # tgt = torch.stack(target_list)
-                        # tgt = tgt.reshape(-1, 3).unsqueeze(0)
-                        tgt = torch.tensor(target_vert).float().cuda().unsqueeze(0)
-                        out = out.reshape(1, sample_size_u * sample_size_v, 3)
-
+                    # tgt = torch.stack(target_list)
+                    # tgt = tgt.reshape(-1, 3).unsqueeze(0)
+                    tgt = torch.tensor(target_vert).float().cuda().unsqueeze(0)
+                    out = out.reshape(1, sample_size_u * sample_size_v, 3)
 
 
-                        if (i + 1) % mod_iter == 0:
-                            # copy tgt to host
-                            tgt_cpu = target_vert.detach().cpu().numpy().squeeze()
-                            out_cpu = out.detach().cpu().numpy().squeeze()
 
-                            gt_normals_cpu = gt_normals.detach().cpu().numpy().squeeze()
-                            gt_normals_cpu = np.stack((tgt_cpu, gt_normals_cpu), axis=1)
+                    if (i + 1) % mod_iter == 0:
+                        # copy tgt to host
+                        tgt_cpu = target_vert.detach().cpu().numpy().squeeze()
+                        out_cpu = out.detach().cpu().numpy().squeeze()
 
-                            if w_normals > 0:
-                                out_normals_cpu = out_normals.detach().cpu().numpy().squeeze()
-                                out_normals_cpu = np.stack((out_cpu, out_normals_cpu), axis=1)
+                        gt_normals_cpu = gt_normals.detach().cpu().numpy().squeeze()
+                        gt_normals_cpu = np.stack((tgt_cpu, gt_normals_cpu), axis=1)
 
-                            # visualize tgt and out
-                            fig = plt.figure()
-                            ax = fig.add_subplot(projection='3d')
-                            # a = 102
-                            # b = 153
-                            a = 0
-                            b = -1
-                            ax.scatter(tgt_cpu[a:b, 0], tgt_cpu[a:b, 1], tgt_cpu[a:b, 2], c='r', marker='o')
-                            ax.scatter(out_cpu[a:b, 0], out_cpu[a:b, 1], out_cpu[a:b, 2], c='b', marker='o')
-
-                            if show_normals == True:
-                                ax.quiver(gt_normals_cpu[:, 0, 0], gt_normals_cpu[:, 0, 1], gt_normals_cpu[:, 0, 2],
-                                          gt_normals_cpu[:, 1, 0], gt_normals_cpu[:, 1, 1], gt_normals_cpu[:, 1, 2],
-                                          color='green', length=0.15)
-                                if w_normals > 0:
-                                    ax.quiver(out_normals_cpu[:, 0, 0], out_normals_cpu[:, 0, 1], out_normals_cpu[:, 0, 2],
-                                              out_normals_cpu[:, 1, 0], out_normals_cpu[:, 1, 1], out_normals_cpu[:, 1, 2],
-                                              color='black', length=0.15)
-
-
-                            plt.show()
                         if w_normals > 0:
-                            loss_chamfer, loss_normals = chamfer_distance(out, tgt, x_normals=out_normals, y_normals=gt_normals)
-                            loss = w_chamfer * loss_chamfer + w_lap * loss_laplacian + w_normals * loss_normals
+                            out_normals_cpu = out_normals.detach().cpu().numpy().squeeze()
+                            out_normals_cpu = np.stack((out_cpu, out_normals_cpu), axis=1)
 
-                            # Save the losses for plotting
-                            chamfer_losses.append(w_chamfer * float(loss_chamfer.detach().cpu()))
-                            normal_losses.append(w_normals * float(loss_normals.detach().cpu()))
-                            laplacian_losses.append(w_lap * float(loss_laplacian.detach().cpu()))
+                        # visualize tgt and out
+                        fig = plt.figure()
+                        ax = fig.add_subplot(projection='3d')
+                        # a = 102
+                        # b = 153
+                        a = 0
+                        b = -1
+                        ax.scatter(tgt_cpu[a:b, 0], tgt_cpu[a:b, 1], tgt_cpu[a:b, 2], c='r', marker='o')
+                        ax.scatter(out_cpu[a:b, 0], out_cpu[a:b, 1], out_cpu[a:b, 2], c='b', marker='o')
 
-                        else:
-                            loss_chamfer, _ = chamfer_distance(out, tgt)
-                            loss = w_chamfer * loss_chamfer + w_lap * loss_laplacian
+                        if show_normals == True:
+                            ax.quiver(gt_normals_cpu[:, 0, 0], gt_normals_cpu[:, 0, 1], gt_normals_cpu[:, 0, 2],
+                                      gt_normals_cpu[:, 1, 0], gt_normals_cpu[:, 1, 1], gt_normals_cpu[:, 1, 2],
+                                      color='green', length=0.15)
+                            if w_normals > 0:
+                                ax.quiver(out_normals_cpu[:, 0, 0], out_normals_cpu[:, 0, 1], out_normals_cpu[:, 0, 2],
+                                          out_normals_cpu[:, 1, 0], out_normals_cpu[:, 1, 1], out_normals_cpu[:, 1, 2],
+                                          color='black', length=0.15)
 
-                    # decrease w_lap according to the epoch
-                    # if i < 600:
-                    #     w_lap = 0.1
-                    # else:
-                    #     w_lap = 0.1 * (1 - (i - 600)/600)
+
+                        plt.show()
+                    if w_normals > 0:
+                        loss_chamfer, loss_normals = chamfer_distance(out, tgt, x_normals=out_normals, y_normals=gt_normals)
+                        loss = w_chamfer * loss_chamfer + w_lap * loss_laplacian + w_normals * loss_normals
+
+                        # Save the losses for plotting
+                        chamfer_losses.append(w_chamfer * float(loss_chamfer.detach().cpu()))
+                        normal_losses.append(w_normals * float(loss_normals.detach().cpu()))
+                        laplacian_losses.append(w_lap * float(loss_laplacian.detach().cpu()))
+
                     else:
-                        loss = (1 - w_lap) * chamfer_distance_each_row(out, target_list) + w_lap * lap
+                        loss_chamfer, _ = chamfer_distance(out, tgt)
+                        loss = w_chamfer * loss_chamfer + w_lap * loss_laplacian
 
-                    log_value('chamfer_distance', loss, i)
-                    # log_value('laplacian_loss', lap * 10, i)
-                    # log_value('close_loss_column', close_loss_column, i)
+                # decrease w_lap according to the epoch
+                # if i < 600:
+                #     w_lap = 0.1
+                # else:
+                #     w_lap = 0.1 * (1 - (i - 600)/600)
+                else:
+                    loss = (1 - w_lap) * chamfer_distance_each_row(out, target_list) + w_lap * lap
+
+                log_value('chamfer_distance', loss, i)
+                # log_value('laplacian_loss', lap * 10, i)
+                # log_value('close_loss_column', close_loss_column, i)
 
             loss.sum().backward(retain_graph=True)
 
@@ -629,9 +646,16 @@ def main():
             # inp_ctrl_pts.grad[:, :, 0, :] = inp_ctrl_pts.grad[:, :, -1, :] = 0
 
             # inp_ctrl_pts.grad[:, 0:6, 0:6, :] = 0
-            mask = torch.ones(inp_ctrl_pts.shape).cuda()
-            mask[:, 6:12, 6:12, :] = 0
-            inp_ctrl_pts.grad = torch.masked_fill(inp_ctrl_pts.grad, mask.bool(), 0)
+
+            # ii, j = indices[idx_patch]
+            #
+            # mask[:, ii:ii + k, j:j + k, :] = 0
+            # inp_ctrl_pts.grad = torch.masked_fill(inp_ctrl_pts.grad, mask.bool(), 0)
+            #
+            # if (i + 1) % n_iter_patch == 0:
+            #     mask[:, ii:ii + k, j:j + k, :] = 1
+            #     idx_patch += 1
+
 
             return loss
 
