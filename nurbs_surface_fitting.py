@@ -317,17 +317,17 @@ def main():
     # cm_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_0.025_20.txt'
     # ctr_pts_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_uniform_warp_offset_0.003_20.txt'
 
-    # gt_path = gt_path + "/data/duck_clean.obj"
+    # gt_path = gt_path + "/pygeodesics/data/duck_clean.obj"
     # cm_path =  dir_path + '/data/cm_ducky_0.003_50.txt'
     # ctr_pts_path =  dir_path + '/data/cm_ducky_0.003_20.txt'
 
-    # gt_path = gt_path + "/pygeodesics/data/sphere.obj"
-    # cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
-    # ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
+    gt_path = gt_path + "/pygeodesics/data/sphere.obj"
+    cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
+    ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
 
-    gt_path = gt_path + "/pygeodesics/data/sphere_normals.obj"
-    cm_path = dir_path + '/data/cm_sphere_half_500.003_50.txt'
-    ctr_pts_path = dir_path + '/data/cm_sphere_half0.003_20.txt'
+    # gt_path = gt_path + "/pygeodesics/data/sphere_normals.obj"
+    # cm_path = dir_path + '/data/cm_sphere_half_500.003_50.txt'
+    # ctr_pts_path = dir_path + '/data/cm_sphere_half0.003_20.txt'
 
 
     # ctr_pts = 40
@@ -357,13 +357,13 @@ def main():
     w_chamfer = 1
     w_normals = 1
 
-    target_from_path = False
+    target_from_path = True
 
 
-    mod_iter = 1
+    mod_iter = 20
     cglobal = 1
     average = 0
-    use_grid = True
+    use_grid = False
     show_normals = True
 
     n_ctrpts = 6
@@ -616,6 +616,23 @@ def main():
                     # log_value('close_loss_column', close_loss_column, i)
 
             loss.sum().backward(retain_graph=True)
+
+            grads_ctrpts = inp_ctrl_pts.grad
+            grads_weights = weights.grad
+            grads_knot_u = knot_int_u.grad
+            grads_knot_v = knot_int_v.grad
+
+            # # avoiding the sphere to open up
+            # close_sphere == True:
+            # inp_ctrl_pts.grad[:, 0, :, :] = 0
+            # inp_ctrl_pts.grad[:, -1, :, :] = 0
+            # inp_ctrl_pts.grad[:, :, 0, :] = inp_ctrl_pts.grad[:, :, -1, :] = 0
+
+            # inp_ctrl_pts.grad[:, 0:6, 0:6, :] = 0
+            mask = torch.ones(inp_ctrl_pts.shape).cuda()
+            mask[:, 6:12, 6:12, :] = 0
+            inp_ctrl_pts.grad = torch.masked_fill(inp_ctrl_pts.grad, mask.bool(), 0)
+
             return loss
 
         if i % 100 < 30:
@@ -624,6 +641,7 @@ def main():
         else:
             loss = opt2.step(closure)
             lr_schedule2.step(loss)
+
 
         out = layer((torch.cat((inp_ctrl_pts, weights), -1), torch.cat((knot_rep_p_0, knot_int_u, knot_rep_p_1), -1),
                      torch.cat((knot_rep_q_0, knot_int_v, knot_rep_q_1), -1)))
