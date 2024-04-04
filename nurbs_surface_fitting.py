@@ -310,6 +310,31 @@ def get_grid_init_points_patches(ctrlpts, k, s):
     indices = [(i, j) for i in range(0, u - k + 1, s) for j in range(0, v - k + 1, s)]
 
     return indices
+
+class Mask:
+    count = 0
+    idx_patch = -1
+    def init(self, masks, n_iter_patch):
+        self.mask = masks
+        self.n_iter_patch = n_iter_patch
+
+    def update(self, indices, k):
+        if self.idx_patch == -1:
+            ii, j = indices[self.idx_patch]
+            self.mask[:, ii:ii + k, j:j + k, :] = 0
+            self.idx_patch += 1
+
+        self.count += 1
+        if self.count == self.n_iter_patch:
+            self.count = 0
+            ii, j = indices[self.idx_patch]
+            if self.idx_patch != -1:
+                self.mask[:, ii:ii + k, j:j + k, :] = 1
+            self.idx_patch += 1
+            ii, j = indices[self.idx_patch]
+            self.mask[:, ii:ii + k, j:j + k, :] = 0
+        return self.mask
+
 def main():
     gt_path = os.path.dirname(os.path.realpath(__file__))
     gt_path = gt_path.split("/")[0:-1]
@@ -329,13 +354,13 @@ def main():
     # cm_path =  dir_path + '/data/cm_ducky_0.003_50.txt'
     # ctr_pts_path =  dir_path + '/data/cm_ducky_0.003_20.txt'
 
-    gt_path = gt_path + "/pygeodesics/data/sphere.obj"
-    cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
-    ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
+    # gt_path = gt_path + "/pygeodesics/data/sphere.obj"
+    # cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
+    # ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
 
-    # gt_path = gt_path + "/pygeodesics/data/sphere_normals.obj"
-    # cm_path = dir_path + '/data/cm_sphere_half_500.003_50.txt'
-    # ctr_pts_path = dir_path + '/data/cm_sphere_half0.003_20.txt'
+    gt_path = gt_path + "/pygeodesics/data/sphere_normals.obj"
+    cm_path = dir_path + '/data/cm_sphere_half_500.003_50.txt'
+    ctr_pts_path = dir_path + '/data/cm_sphere_half0.003_20.txt'
 
 
     # ctr_pts = 40
@@ -365,13 +390,13 @@ def main():
     w_chamfer = 1
     w_normals = 1
 
-    target_from_path = True
+    target_from_path = False
 
 
-    mod_iter = 20
+    mod_iter = 200
     cglobal = 1
     average = 0
-    use_grid = False
+    use_grid = True
     show_normals = True
 
     n_ctrpts = 6
@@ -379,7 +404,7 @@ def main():
     k = 6 # kernel size
     s = 2 # stride
     n_iter_patch = 20
-    idx_patch = 0
+    using_mask = False
 
     # best
     learning_rate = 0.05
@@ -412,7 +437,6 @@ def main():
     else:
     # create a torch tensor from input_point_list
         target_vert = torch.tensor(input_point_list).float().cuda()
-
         point_cloud = Pointclouds(points=[target_vert])
         gt_normals = point_cloud.estimate_normals(16)
 
@@ -450,10 +474,15 @@ def main():
     num_ctrl_pts2 = ctr_pts_v
 
     inp_ctrl_pts.requires_grad = True
+    #create a int tensor idx_patch as int
+    idx_patch = torch.tensor(0).int().cuda()
+
 
     #used only when masking out the control points
     indices = get_grid_init_points_patches(inp_ctrl_pts, k, s)
-    mask = torch.ones(inp_ctrl_pts.shape).cuda()
+
+
+
 
     if torch.cuda.is_available():
         knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 - p).unsqueeze(0).cuda(), requires_grad=True)
@@ -469,6 +498,15 @@ def main():
         weights = torch.nn.Parameter(torch.ones(1, num_ctrl_pts1, num_ctrl_pts2, 1).float(), requires_grad=True)
         layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=sample_size_u,
                          out_dim_v=sample_size_v, method='tc')
+
+    if using_mask:
+        mask = torch.ones(inp_ctrl_pts.shape).cuda()
+        mask_obj = Mask()
+        mask_obj.init( mask, n_iter_patch)
+
+        mask_weights = torch.ones(weights.shape).cuda()
+        mask_weights_obj = Mask()
+        mask_weights_obj.init(mask_weights, n_iter_patch)
 
     opt1 = torch.optim.Adam(iter([inp_ctrl_pts, weights]), lr=learning_rate)
     opt2 = torch.optim.Adam(iter([knot_int_u, knot_int_v]), lr=1e-2)
@@ -512,6 +550,7 @@ def main():
 
     for i in pbar:
         # torch.cuda.empty_cache()
+
         if torch.cuda.is_available():
             knot_rep_p_0 = torch.zeros(1, p + 1).cuda()
             knot_rep_p_1 = torch.zeros(1, p).cuda()
@@ -534,7 +573,6 @@ def main():
                                                                                                    -2, :]) / 2
                 inp_ctrl_pts[:, :, 2, :] = inp_ctrl_pts[:, :, -1, :] = (inp_ctrl_pts[:, :, 2, :] + inp_ctrl_pts[:, :,
                                                                                                    -1, :]) / 2
-
             pass
 
         def closure():
@@ -645,16 +683,15 @@ def main():
             # inp_ctrl_pts.grad[:, -1, :, :] = 0
             # inp_ctrl_pts.grad[:, :, 0, :] = inp_ctrl_pts.grad[:, :, -1, :] = 0
 
-            # inp_ctrl_pts.grad[:, 0:6, 0:6, :] = 0
+            # disabling knots
+            knot_int_u.grad = torch.zeros(knot_int_u.grad.shape).cuda()
+            knot_int_v.grad = torch.zeros(knot_int_v.grad.shape).cuda()
 
-            # ii, j = indices[idx_patch]
-            #
-            # mask[:, ii:ii + k, j:j + k, :] = 0
-            # inp_ctrl_pts.grad = torch.masked_fill(inp_ctrl_pts.grad, mask.bool(), 0)
-            #
-            # if (i + 1) % n_iter_patch == 0:
-            #     mask[:, ii:ii + k, j:j + k, :] = 1
-            #     idx_patch += 1
+            if using_mask:
+                masked = mask_obj.update(indices, k)
+                masked_weights = mask_weights_obj.update(indices, k)
+                inp_ctrl_pts.grad = torch.masked_fill(inp_ctrl_pts.grad, masked.bool(), 0)
+                weights.grad = torch.masked_fill(weights.grad, masked_weights.bool(), 0)
 
 
             return loss
