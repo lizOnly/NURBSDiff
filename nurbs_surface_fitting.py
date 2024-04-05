@@ -384,22 +384,24 @@ def main():
 
     out_dim_u = 250
     out_dim_v = 250
-    resolution_v = 21 # samples in the v directions columns per curve points
+
 
     w_lap = 0.1
     w_chamfer = 1
-    w_normals = 1
+    w_normals = 0
 
     target_from_path = False
 
 
-    mod_iter = 200
+    mod_iter = 2000
     cglobal = 1
     average = 0
     use_grid = True
     show_normals = True
 
-    n_ctrpts = 6
+    n_ctrpts = 10
+    resolution_u = 30  # samples in the v directions columns per curve points
+    resolution_v = 30  # samples in the u direction rows per curve points
 
     k = 6 # kernel size
     s = 2 # stride
@@ -413,9 +415,7 @@ def main():
     laplacian_losses = []
     normal_losses = []
 
-
-
-    input_point_list, target_list, vertex_positions, resolution_u = read_irregular_file(cm_path)
+    input_point_list, target_list, vertex_positions, resolution_uu = read_irregular_file(cm_path)
 
     print("#input points " + str(len(input_point_list)))
 
@@ -495,6 +495,8 @@ def main():
         knot_int_u = torch.nn.Parameter(torch.ones(num_ctrl_pts1 - p).unsqueeze(0), requires_grad=True)
         knot_int_v = torch.nn.Parameter(torch.ones(num_ctrl_pts2 - q).unsqueeze(0), requires_grad=True)
         # knot_int_v = torch.nn.Parameter(knots_v.unsqueeze(0).cuda(), requires_grad=True)
+        print(sample_size_u, sample_size_v)
+
         weights = torch.nn.Parameter(torch.ones(1, num_ctrl_pts1, num_ctrl_pts2, 1).float(), requires_grad=True)
         layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=sample_size_u,
                          out_dim_v=sample_size_v, method='tc')
@@ -611,7 +613,6 @@ def main():
                     out = out.reshape(1, sample_size_u * sample_size_v, 3)
 
 
-
                     if (i + 1) % mod_iter == 0:
                         # copy tgt to host
                         tgt_cpu = target_vert.detach().cpu().numpy().squeeze()
@@ -703,6 +704,8 @@ def main():
             loss = opt2.step(closure)
             lr_schedule2.step(loss)
 
+        loss = opt1.step(closure)
+        lr_schedule1.step(loss)
 
         out = layer((torch.cat((inp_ctrl_pts, weights), -1), torch.cat((knot_rep_p_0, knot_int_u, knot_rep_p_1), -1),
                      torch.cat((knot_rep_q_0, knot_int_v, knot_rep_q_1), -1)))
@@ -731,7 +734,7 @@ def main():
             ax2._axis3don = False
 
             plt.show()
-            if show_normals == True:
+            if w_normals > 0 :
                 show_losses(chamfer_losses, normal_losses, laplacian_losses)
 
         if loss.item() < 1e-6:
