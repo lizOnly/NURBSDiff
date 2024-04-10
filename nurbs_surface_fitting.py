@@ -307,8 +307,13 @@ def get_grid_init_points_patches(ctrlpts, k, s):
     u = ctrlpts.shape[1]
     v = ctrlpts.shape[2]
     # get the list of indices (i,j) for the convlution using k as kernel size and s as stride
-    indices = [(i, j) for i in range(0, u - k + 1, s) for j in range(0, v - k + 1, s)]
-
+    d_indices = [(i, j) for i in range(0, u - k + 1, k - s) for j in range(0, v - k + 1, k - s)]
+    # for i in range(0, v - k, k - s):
+    #     d_indices.append((i, v - k - 1))
+    # for j in range(0, u - k, k - s):
+    #     d_indices.append((u - k - 1, j))
+    rev_indices = [(i, j) for i in range( u - k , -1, -k + s) for j in range( v - k , -1, -k + s)]
+    indices = d_indices + rev_indices
     return indices
 
 class Mask:
@@ -323,6 +328,8 @@ class Mask:
             ii, j = indices[self.idx_patch]
             self.mask[:, ii:ii + k, j:j + k, :] = 0
             self.idx_patch += 1
+        if self.idx_patch == len(indices) - 1:
+            self.idx_patch = 0
 
         self.count += 1
         if self.count == self.n_iter_patch:
@@ -354,13 +361,13 @@ def main():
     # cm_path =  dir_path + '/data/cm_ducky_0.003_50.txt'
     # ctr_pts_path =  dir_path + '/data/cm_ducky_0.003_20.txt'
 
-    # gt_path = gt_path + "/pygeodesics/data/sphere.obj"
-    # cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
-    # ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
+    gt_path = gt_path + "/pygeodesics/data/sphere.obj"
+    cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
+    ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
 
-    gt_path = gt_path + "/pygeodesics/data/sphere_normals.obj"
-    cm_path = dir_path + '/data/cm_sphere_half_500.003_50.txt'
-    ctr_pts_path = dir_path + '/data/cm_sphere_half0.003_20.txt'
+    # gt_path = gt_path + "/pygeodesics/data/sphere_normals.obj"
+    # cm_path = dir_path + '/data/cm_sphere_half_500.003_50.txt'
+    # ctr_pts_path = dir_path + '/data/cm_sphere_half0.003_20.txt'
 
 
     # ctr_pts = 40
@@ -390,13 +397,13 @@ def main():
     w_chamfer = 1
     w_normals = 0
 
-    target_from_path = False
+    target_from_path = True
 
 
-    mod_iter = 2000
+    mod_iter = 20
     cglobal = 1
     average = 0
-    use_grid = True
+    use_grid = False
     show_normals = True
 
     n_ctrpts = 10
