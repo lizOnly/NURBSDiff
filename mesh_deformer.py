@@ -63,8 +63,9 @@ def plot_pointcloud(mesh, title=""):
     ax.view_init(190, 30)
     plt.show()
 
-
-trg_obj = '/mnt/Chest/Repositories/spherical_harmonic_maps/data/luigi.obj'
+trg_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/duck_clean.obj'
+# trg_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/luigi.obj'
+src_obj = '/home/lizeth/Documents/Repositories/pygeodesics/data/sphere_mesh_50.obj'
 
 # We read the target 3D model using load_obj
 verts, faces, aux = load_obj(trg_obj)
@@ -90,11 +91,27 @@ print('vertices')
 print(verts.shape)
 
 # We initialize the source shape to be a sphere of radius 1
-src_mesh = ico_sphere(4, device)
-print(src_mesh.verts_packed().shape)
+src_mesh_ico = ico_sphere(4, device)
+print(src_mesh_ico.verts_packed().shape)
 
+#show the sphere
+
+
+# verts_src, faces_src, aux = load_obj(src_obj)
+#
+# faces_idx = faces_src.verts_idx.to(device)
+# verts_src = verts_src.to(device)
+#
+# center = verts_src.mean(0)
+# verts_src = verts_src - center
+# scale = max(verts_src.abs().max(0)[0])
+# verts_src = verts_src / scale
+
+# src_mesh = Meshes(verts=[verts_src], faces=[faces_idx])
+src_mesh = src_mesh_ico
 # The shape of the deform parameters is equal to the total number of vertices in src_mesh
 deform_verts = torch.full(src_mesh.verts_packed().shape, 0.0, device=device, requires_grad=True)
+
 # The optimizer
 optimizer = torch.optim.SGD([deform_verts], lr=1.0, momentum=0.9)
 # Number of optimization steps
@@ -177,9 +194,15 @@ plt.show()
 # Fetch the verts and faces of the final predicted mesh
 final_verts, final_faces = new_src_mesh.get_mesh_verts_faces(0)
 
+#icosphere
+final_verts_ico, final_faces_ico = src_mesh_ico.get_mesh_verts_faces(0)
+
+
 # Scale normalize back to the original target size
 final_verts = final_verts * scale + center
 
 # Store the predicted mesh using save_obj
-final_obj = '/mnt/Chest/Repositories/spherical_harmonic_maps/data/luigi_approx_only_edge.obj'
+final_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/ducky_def.obj'
+icosphere_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/ico_sphere.obj'
 save_obj(final_obj, final_verts, final_faces)
+save_obj(icosphere_obj, final_verts_ico, final_faces_ico)
