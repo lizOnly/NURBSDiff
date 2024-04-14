@@ -63,9 +63,10 @@ def plot_pointcloud(mesh, title=""):
     ax.view_init(190, 30)
     plt.show()
 
-trg_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/duck_clean.obj'
-# trg_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/luigi.obj'
-src_obj = '/home/lizeth/Documents/Repositories/pygeodesics/data/sphere_mesh_50.obj'
+path = '/home/lizeth/Documents/Repositories/pygeodesics/data/'
+# trg_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/duck_clean.obj'
+trg_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/luigi.obj'
+src_obj = path + 'quadsphere_4.obj'
 
 # We read the target 3D model using load_obj
 verts, faces, aux = load_obj(trg_obj)
@@ -95,20 +96,18 @@ src_mesh_ico = ico_sphere(4, device)
 print(src_mesh_ico.verts_packed().shape)
 
 #show the sphere
+verts_src, faces_src, aux = load_obj(src_obj)
 
+faces_idx = faces_src.verts_idx.to(device)
+verts_src = verts_src.to(device)
 
-# verts_src, faces_src, aux = load_obj(src_obj)
-#
-# faces_idx = faces_src.verts_idx.to(device)
-# verts_src = verts_src.to(device)
-#
-# center = verts_src.mean(0)
-# verts_src = verts_src - center
-# scale = max(verts_src.abs().max(0)[0])
-# verts_src = verts_src / scale
+center = verts_src.mean(0)
+verts_src = verts_src - center
+scale = max(verts_src.abs().max(0)[0])
+verts_src = verts_src / scale
 
-# src_mesh = Meshes(verts=[verts_src], faces=[faces_idx])
-src_mesh = src_mesh_ico
+src_mesh = Meshes(verts=[verts_src], faces=[faces_idx])
+# src_mesh = src_mesh_ico
 # The shape of the deform parameters is equal to the total number of vertices in src_mesh
 deform_verts = torch.full(src_mesh.verts_packed().shape, 0.0, device=device, requires_grad=True)
 
@@ -148,7 +147,9 @@ for i in loop:
     sample_src = sample_points_from_meshes(new_src_mesh, 5000)
 
     # We compare the two sets of pointclouds by computing (a) the chamfer loss
-    loss_chamfer, _ = chamfer_distance(sample_trg, sample_src)
+    loss_chamfer, _ = chamfer_distance(sample_trg, sample_src )
+
+    # loss_chamfer = point_mesh_face_distance(new_src_mesh, sample_trg)
 
     # and (b) the edge length of the predicted mesh
     loss_edge = mesh_edge_loss(new_src_mesh)
@@ -157,7 +158,7 @@ for i in loop:
     loss_normal = mesh_normal_consistency(new_src_mesh)
 
     # mesh laplacian smoothing
-    loss_laplacian = mesh_laplacian_smoothing(new_src_mesh, method="uniform")
+    loss_laplacian = mesh_laplacian_smoothing(new_src_mesh, method="cot")
 
     # Weighted sum of the losses
     loss = loss_chamfer * w_chamfer + loss_edge * w_edge + loss_normal * w_normal + loss_laplacian * w_laplacian
@@ -172,8 +173,9 @@ for i in loop:
     laplacian_losses.append(float(loss_laplacian.detach().cpu()))
 
     # Plot mesh
-    if i % plot_period == 0:
-        plot_pointcloud(new_src_mesh, title="iter: %d" % i)
+    # if i % plot_period == 0:
+    #     plot_pointcloud(new_src_mesh, title="iter: %d" % i)
+
 
     # Optimization step
     loss.backward()
@@ -202,7 +204,7 @@ final_verts_ico, final_faces_ico = src_mesh_ico.get_mesh_verts_faces(0)
 final_verts = final_verts * scale + center
 
 # Store the predicted mesh using save_obj
-final_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/ducky_def.obj'
+final_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/luigi_factor_def.obj'
 icosphere_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/ico_sphere.obj'
 save_obj(final_obj, final_verts, final_faces)
 save_obj(icosphere_obj, final_verts_ico, final_faces_ico)
