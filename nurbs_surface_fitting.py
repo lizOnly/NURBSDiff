@@ -349,9 +349,9 @@ def main():
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
 
-    # gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/brain.obj"
-    # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain.txt'
-    # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
+    gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/brain.obj"
+    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain.txt'
+    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
 
     # gt_path = "/mnt/Chest/Repositories/NURBSDiff/data/luigi.obj"
     # cm_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_0.025_20.txt'
@@ -361,14 +361,17 @@ def main():
     # cm_path =  dir_path + '/data/cm_ducky_0.003_50.txt'
     # ctr_pts_path =  dir_path + '/data/cm_ducky_0.003_20.txt'
 
-    gt_path = gt_path + "/pygeodesics/data/sphere.obj"
-    cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
-    ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
+    # gt_path = gt_path + "/pygeodesics/data/sphere.obj"
+    # cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
+    # ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
 
     # gt_path = gt_path + "/pygeodesics/data/sphere_normals.obj"
     # cm_path = dir_path + '/data/cm_sphere_half_500.003_50.txt'
     # ctr_pts_path = dir_path + '/data/cm_sphere_half0.003_20.txt'
-
+    harmonic_path = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps'
+    gt_path = harmonic_path + '/data/luigi.obj'
+    cm_path = dir_path + '/data/cm_quadsphere_luigi_50.txt'
+    ctr_pts_path = dir_path + '/data/cm_quadsphere_4_luigi_0.003_50.txt'
 
     # ctr_pts = 40
     # resolution_u = 64
@@ -377,7 +380,7 @@ def main():
 
     object_name = gt_path.split("/")[-1].split(".")[0]
 
-    num_epochs = 2000
+    num_epochs = 1
     loss_type = "chamfer"
 
     axis = "y"
@@ -400,15 +403,15 @@ def main():
     target_from_path = True
 
 
-    mod_iter = 20
+    mod_iter = 1
     cglobal = 1
     average = 0
     use_grid = False
-    show_normals = True
+    show_normals = False
 
     n_ctrpts = 10
-    resolution_u = 30  # samples in the v directions columns per curve points
-    resolution_v = 30  # samples in the u direction rows per curve points
+    resolution_u = 21  # samples in the v directions columns per curve points
+    resolution_v = 100  # samples in the u direction rows per curve points
 
     k = 6 # kernel size
     s = 2 # stride
@@ -704,12 +707,12 @@ def main():
 
             return loss
 
-        if i % 100 < 30:
-            loss = opt1.step(closure)
-            lr_schedule1.step(loss)
-        else:
-            loss = opt2.step(closure)
-            lr_schedule2.step(loss)
+        # if i % 100 < 30:
+        #     loss = opt1.step(closure)
+        #     lr_schedule1.step(loss)
+        # else:
+        #     loss = opt2.step(closure)
+        #     lr_schedule2.step(loss)
 
         loss = opt1.step(closure)
         lr_schedule1.step(loss)
