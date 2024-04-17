@@ -76,6 +76,7 @@ verts, faces, aux = load_obj(trg_obj)
 # For this tutorial, normals and textures are ignored.
 faces_idx = faces.verts_idx.to(device)
 verts = verts.to(device)
+normals = aux.normals.to(device)
 
 # We scale normalize and center the target mesh to fit in a sphere of radius 1 centered at (0,0,0).
 # (scale, center) will be used to bring the predicted mesh to its original center and scale
@@ -85,8 +86,14 @@ verts = verts - center
 scale = max(verts.abs().max(0)[0])
 verts = verts / scale
 
+#normalize normals
+center = normals.mean(0)
+normals = normals - center
+scale = max(normals.abs().max(0)[0])
+normals = normals / scale
+
 # We construct a Meshes structure for the target mesh
-trg_mesh = Meshes(verts=[verts], faces=[faces_idx])
+trg_mesh = Meshes(verts=[verts], faces=[faces_idx], verts_normals=[normals])
 
 print('vertices')
 print(verts.shape)
@@ -142,12 +149,19 @@ for i in loop:
     # Deform the mesh
     new_src_mesh = src_mesh.offset_verts(deform_verts)
 
-    # We sample 5k points from the surface of each mesh
+    # # We sample 5k points from the surface of each mesh
+    # sample_trg, sample_trg_normals = sample_points_from_meshes(trg_mesh, 5000, return_normals=True)
+    # sample_src, sample_src_normals = sample_points_from_meshes(new_src_mesh, 5000, return_normals=True)
+    #
+    # # We compare the two sets of pointclouds by computing (a) the chamfer loss
+    # loss_chamfer, _ = chamfer_distance(sample_trg, sample_src, x_normals = sample_trg_normals, y_normals = sample_src_normals)
+
     sample_trg = sample_points_from_meshes(trg_mesh, 5000)
     sample_src = sample_points_from_meshes(new_src_mesh, 5000)
 
     # We compare the two sets of pointclouds by computing (a) the chamfer loss
-    loss_chamfer, _ = chamfer_distance(sample_trg, sample_src )
+    loss_chamfer, _ = chamfer_distance(sample_trg, sample_src)
+
 
     # loss_chamfer = point_mesh_face_distance(new_src_mesh, sample_trg)
 
@@ -206,5 +220,7 @@ final_verts = final_verts * scale + center
 # Store the predicted mesh using save_obj
 final_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/luigi_factor_def.obj'
 icosphere_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/ico_sphere.obj'
+tgt_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/luigi_normalized.obj'
 save_obj(final_obj, final_verts, final_faces)
 save_obj(icosphere_obj, final_verts_ico, final_faces_ico)
+save_obj(tgt_obj, trg_mesh.verts_packed(), trg_mesh.faces_packed())
