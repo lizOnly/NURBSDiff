@@ -13,6 +13,7 @@ from tensorboard_logger import configure, log_value
 from tqdm import tqdm
 import itertools
 from pytorch3d.structures import Pointclouds
+from pytorch3d.ops import sample_points_from_meshes
 
 from pytorch3d.structures import Meshes
 from pytorch3d.io import load_obj, save_obj
@@ -326,6 +327,12 @@ class Mask:
             self.mask[:, ii:ii + k, j:j + k, :] = 0
         return self.mask
 
+def normalize_tensor(verts):
+    center = verts.mean(0)
+    verts = verts - center
+    scale = max(verts.abs().max(0)[0])
+    verts = verts / scale
+    return verts
 def main():
     gt_path = os.path.dirname(os.path.realpath(__file__))
     gt_path = gt_path.split("/")[0:-1]
@@ -388,7 +395,7 @@ def main():
     average = 0
     show_normals = True
 
-    resolution_u = 21  # samples in the v directions columns per curve points
+    resolution_u = 50  # samples in the v directions columns per curve points
     resolution_v = 100  # samples in the u direction rows per curve points
 
     k = 6 # kernel size
@@ -410,8 +417,13 @@ def main():
 
     if target_from_path == True:
         verts, faces, properties = load_obj(gt_path)
-
+        verts = normalize_tensor(verts)
         target_vert = torch.tensor(verts).float().cuda()
+
+        faces_idx = faces.verts_idx.to(device)
+        verts = verts.to(device)
+        trg_mesh = Meshes(verts=[verts], faces=[faces_idx])
+
         if w_normals > 0:
             gt_normals = properties.normals
             gt_normals = torch.tensor(gt_normals).float().cuda().unsqueeze(0)
@@ -601,7 +613,9 @@ def main():
                         laplacian_losses.append(w_lap * float(loss_laplacian.detach().cpu()))
 
                     else:
-                        loss_chamfer, _ = chamfer_distance(out, tgt)
+                        sample_trg = sample_points_from_meshes(trg_mesh, sample_size_v * sample_size_u)
+                        loss_chamfer, _ = chamfer_distance(out, sample_trg)
+                        #try to optimize the control polygon
                         loss = w_chamfer * loss_chamfer + w_lap * loss_laplacian
 
                 # decrease w_lap according to the epoch
@@ -693,8 +707,6 @@ def main():
     U, V = layer.getrealUV()
     U = U.detach().cpu().numpy().reshape(-1, 1)
     V = V.detach().cpu().numpy().reshape(-1, 1)
-
-    print(U, V)
 
     predicted = out.detach().cpu().numpy().squeeze()
 
