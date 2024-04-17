@@ -327,13 +327,14 @@ class Mask:
             self.mask[:, ii:ii + k, j:j + k, :] = 0
         return self.mask
 
-def normalize_tensor(verts):
+def normalize_tensor(verts, factor=1):
     center = verts.mean(0)
     verts = verts - center
     scale = max(verts.abs().max(0)[0])
-    verts = verts / scale
+    verts = (verts / scale) * factor
     return verts
 def main():
+    # cham_dist = cham_x ** 2 + cham_y ** (1 / 2)
     gt_path = os.path.dirname(os.path.realpath(__file__))
     gt_path = gt_path.split("/")[0:-1]
     gt_path = "/".join(gt_path)
@@ -417,15 +418,17 @@ def main():
 
     if target_from_path == True:
         verts, faces, properties = load_obj(gt_path)
-        verts = normalize_tensor(verts)
+        verts = normalize_tensor(verts, 0.9)
         target_vert = torch.tensor(verts).float().cuda()
 
         faces_idx = faces.verts_idx.to(device)
         verts = verts.to(device)
         trg_mesh = Meshes(verts=[verts], faces=[faces_idx])
 
+
         if w_normals > 0:
             gt_normals = properties.normals
+            gt_normals = normalize_tensor(gt_normals, 0.9)
             gt_normals = torch.tensor(gt_normals).float().cuda().unsqueeze(0)
     else:
     # create a torch tensor from input_point_list
