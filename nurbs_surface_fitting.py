@@ -349,9 +349,9 @@ def main():
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
 
-    gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/brain.obj"
-    cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain.txt'
-    ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
+    # gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/brain.obj"
+    # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain.txt'
+    # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
 
     # gt_path = "/mnt/Chest/Repositories/NURBSDiff/data/luigi.obj"
     # cm_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_0.025_20.txt'
@@ -407,7 +407,7 @@ def main():
     cglobal = 1
     average = 0
     use_grid = False
-    show_normals = False
+    show_normals = True
 
     n_ctrpts = 10
     resolution_u = 21  # samples in the v directions columns per curve points
@@ -429,21 +429,14 @@ def main():
 
     print("#input points " + str(len(input_point_list)))
 
-    # if torch.cuda.is_available():
-    #     target = torch.tensor(vertex_positions).float().cuda()
-    # else:
-    #     target = torch.tensor(vertex_positions).float()
-    #
-    # print(target.shape)
-    # target_list.append(target)
-
 
     if target_from_path == True:
         verts, faces, properties = load_obj(gt_path)
 
         target_vert = torch.tensor(verts).float().cuda()
-        gt_normals = properties.normals
-        gt_normals = torch.tensor(gt_normals).float().cuda().unsqueeze(0)
+        if w_normals > 0:
+            gt_normals = properties.normals
+            gt_normals = torch.tensor(gt_normals).float().cuda().unsqueeze(0)
     else:
     # create a torch tensor from input_point_list
         target_vert = torch.tensor(input_point_list).float().cuda()
@@ -461,8 +454,6 @@ def main():
     else:
         cp_resolution_u = n_ctrpts
         cp_resolution_v = n_ctrpts
-
-
 
     if torch.cuda.is_available():
         if use_grid:
@@ -628,8 +619,9 @@ def main():
                         tgt_cpu = target_vert.detach().cpu().numpy().squeeze()
                         out_cpu = out.detach().cpu().numpy().squeeze()
 
-                        gt_normals_cpu = gt_normals.detach().cpu().numpy().squeeze()
-                        gt_normals_cpu = np.stack((tgt_cpu, gt_normals_cpu), axis=1)
+                        if w_normals > 0:
+                            gt_normals_cpu = gt_normals.detach().cpu().numpy().squeeze()
+                            gt_normals_cpu = np.stack((tgt_cpu, gt_normals_cpu), axis=1)
 
                         if w_normals > 0:
                             out_normals_cpu = out_normals.detach().cpu().numpy().squeeze()
@@ -645,7 +637,7 @@ def main():
                         ax.scatter(tgt_cpu[a:b, 0], tgt_cpu[a:b, 1], tgt_cpu[a:b, 2], c='r', marker='o')
                         ax.scatter(out_cpu[a:b, 0], out_cpu[a:b, 1], out_cpu[a:b, 2], c='b', marker='o')
 
-                        if show_normals == True:
+                        if show_normals == True and w_normals > 0:
                             ax.quiver(gt_normals_cpu[:, 0, 0], gt_normals_cpu[:, 0, 1], gt_normals_cpu[:, 0, 2],
                                       gt_normals_cpu[:, 1, 0], gt_normals_cpu[:, 1, 1], gt_normals_cpu[:, 1, 2],
                                       color='green', length=0.15)
