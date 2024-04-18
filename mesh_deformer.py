@@ -63,10 +63,22 @@ def plot_pointcloud(mesh, title=""):
     ax.view_init(190, 30)
     plt.show()
 
+def plot_pointclouds(points, title=""):
+    x, y, z = points.clone().detach().cpu().squeeze().unbind(1)
+    fig = plt.figure(figsize=(5, 5))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter3D(x, z, -y)
+    ax.set_xlabel('x')
+    ax.set_ylabel('z')
+    ax.set_zlabel('y')
+    ax.set_title(title)
+    ax.view_init(190, 30)
+    plt.show()
+
 path = '/home/lizeth/Documents/Repositories/pygeodesics/data/'
 # trg_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/duck_clean.obj'
 trg_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/luigi.obj'
-src_obj = path + 'quadsphere_4.obj'
+src_obj = path + 'quadsphere_5.obj'
 
 # We read the target 3D model using load_obj
 verts, faces, aux = load_obj(trg_obj)
@@ -130,6 +142,7 @@ w_edge = 1.0
 w_normal = 0.01
 # Weight for mesh laplacian smoothing
 w_laplacian = 0.1
+w_laplacian_diff = 1
 # Plot period for the losses
 plot_period = 250
 loop = tqdm(range(Niter))
@@ -138,9 +151,11 @@ chamfer_losses = []
 laplacian_losses = []
 edge_losses = []
 normal_losses = []
-
+# cham_dist = cham_x ** 2 + cham_y ** (1 / 2)
 # %matplotlib
 # inline
+new_src_mesh = src_mesh.offset_verts(deform_verts)
+loss_laplacian, prev_loss_vector = mesh_laplacian_smoothing(new_src_mesh, method="cot")
 
 for i in loop:
     # Initialize optimizer
@@ -159,6 +174,9 @@ for i in loop:
     sample_trg = sample_points_from_meshes(trg_mesh, 5000)
     sample_src = sample_points_from_meshes(new_src_mesh, 5000)
 
+    plot_pointclouds(sample_src, title="src: %d" % i)
+    plot_pointclouds(sample_trg, title="target: %d" % i)
+
     # We compare the two sets of pointclouds by computing (a) the chamfer loss
     loss_chamfer, _ = chamfer_distance(sample_trg, sample_src)
 
@@ -172,10 +190,14 @@ for i in loop:
     loss_normal = mesh_normal_consistency(new_src_mesh)
 
     # mesh laplacian smoothing
-    loss_laplacian = mesh_laplacian_smoothing(new_src_mesh, method="cot")
+    loss_laplacian, loss_vector = mesh_laplacian_smoothing(new_src_mesh, method="cot")
+    # distance loss l1 norma between two vectors
+    l1loss = torch.nn.L1Loss()
+    loss_laplacian_diff = l1loss(prev_loss_vector, loss_vector)
+    prev_loss_vector = loss_vector
 
     # Weighted sum of the losses
-    loss = loss_chamfer * w_chamfer + loss_edge * w_edge + loss_normal * w_normal + loss_laplacian * w_laplacian
+    loss = loss_chamfer * w_chamfer + loss_edge * w_edge + loss_normal * w_normal + loss_laplacian * w_laplacian +  w_laplacian_diff * loss_laplacian_diff
 
     # Print the losses
     loop.set_description('total_loss = %.6f' % loss)
@@ -187,12 +209,12 @@ for i in loop:
     laplacian_losses.append(float(loss_laplacian.detach().cpu()))
 
     # Plot mesh
-    # if i % plot_period == 0:
-    #     plot_pointcloud(new_src_mesh, title="iter: %d" % i)
+    if i % plot_period == 0:
+        plot_pointcloud(new_src_mesh, title="iter: %d" % i)
 
 
     # Optimization step
-    loss.backward()
+    loss.backward(retain_graph=True)
     optimizer.step()
 
 fig = plt.figure(figsize=(13, 5))
