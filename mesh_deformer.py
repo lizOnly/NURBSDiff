@@ -75,10 +75,15 @@ def plot_pointclouds(points, title=""):
     ax.view_init(190, 30)
     plt.show()
 
-path = '/home/lizeth/Documents/Repositories/pygeodesics/data/'
+# path_pygeodesics = '/home/lizeth/Documents/Repositories/pygeodesics/data/'
+# path_conformal = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/'
+
+path_pygeodesics = '/mnt/Chest/Repositories/pygeodesics/data/'
+path_conformal = '/mnt/Chest/Repositories/spherical_harmonic_maps/data/'
+
 # trg_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/duck_clean.obj'
-trg_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/luigi.obj'
-src_obj = path + 'quadsphere_5.obj'
+trg_obj = path_pygeodesics + 'luigi.obj'
+src_obj = path_conformal + 'quadsphere_4.obj'
 
 # We read the target 3D model using load_obj
 verts, faces, aux = load_obj(trg_obj)
@@ -174,8 +179,8 @@ for i in loop:
     sample_trg = sample_points_from_meshes(trg_mesh, 5000)
     sample_src = sample_points_from_meshes(new_src_mesh, 5000)
 
-    plot_pointclouds(sample_src, title="src: %d" % i)
-    plot_pointclouds(sample_trg, title="target: %d" % i)
+    # plot_pointclouds(sample_src, title="src: %d" % i)
+    # plot_pointclouds(sample_trg, title="target: %d" % i)
 
     # We compare the two sets of pointclouds by computing (a) the chamfer loss
     loss_chamfer, _ = chamfer_distance(sample_trg, sample_src)
