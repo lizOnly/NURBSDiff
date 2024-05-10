@@ -51,14 +51,28 @@ else:
 def angle_distance(x, y, x_normals=None, y_normals=None, norm=2):
     from pytorch3d.ops.knn import knn_points
     from pytorch3d.loss.chamfer import _handle_pointcloud_input
+
+    from pytorch3d.ops import estimate_pointcloud_normals
     x_lengths = None
     y_lengths = None
 
     x, x_lengths, x_normals = _handle_pointcloud_input(x, x_lengths, x_normals)
     y, y_lengths, y_normals = _handle_pointcloud_input(y, y_lengths, y_normals)
     x_nn = knn_points(x, y, lengths1=x_lengths, lengths2=y_lengths, norm=norm, K=1)
-    cham_x = x_nn.dists[..., 0]
-    pass
+    dist_s_y = x_nn.dists[..., 0]
+    s_y = x_nn.idx[..., 0]
+
+    # estimate point cloud normals of x using pytorch3d
+    n_x = estimate_pointcloud_normals(x).squeeze() * -1
+
+    c_y = torch.gather(y, 1, s_y.unsqueeze(-1).expand(-1, -1, 3))
+    temp = (x - c_y).squeeze()
+    # angles = torch.tensordot(temp, n_x)
+    cosine = torch.einsum('ij,ij->i', temp, n_x)
+    cosine = torch.clip(cosine, -1, 1)
+    angles = torch.arccos(cosine)
+    angle_cpu = c_y.cpu().detach().numpy()
+    return torch.mean(angles)
 
 def plot_pointcloud(mesh, title=""):
     # Sample points uniformly from the surface of the mesh.
@@ -86,15 +100,15 @@ def plot_pointclouds(points, title=""):
     ax.view_init(190, 30)
     plt.show()
 
-# path_pygeodesics = '/home/lizeth/Documents/Repositories/pygeodesics/data/'
-# path_conformal = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/'
+path_pygeodesics = '/home/lizeth/Documents/Repositories/pygeodesics/data/'
+path_conformal = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/'
 
-path_pygeodesics = '/mnt/Chest/Repositories/pygeodesics/data/'
-path_conformal = '/mnt/Chest/Repositories/spherical_harmonic_maps/data/'
+# path_pygeodesics = '/mnt/Chest/Repositories/pygeodesics/data/'
+# path_conformal = '/mnt/Chest/Repositories/spherical_harmonic_maps/data/'
 
 # trg_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/duck_clean.obj'
 trg_obj = path_pygeodesics + 'luigi.obj'
-src_obj = path_conformal + 'quadsphere_4.obj'
+src_obj = path_conformal + 'quadsphere_5.obj'
 
 # We read the target 3D model using load_obj
 verts, faces, aux = load_obj(trg_obj)
@@ -195,7 +209,7 @@ for i in loop:
 
     # We compare the two sets of pointclouds by computing (a) the chamfer loss
     loss_chamfer, _ = chamfer_distance(sample_trg, sample_src)
-    angle_distance(sample_trg, sample_src)
+    # angles = angle_distance(sample_trg, sample_src)
 
 
     # loss_chamfer = point_mesh_face_distance(new_src_mesh, sample_trg)
@@ -215,6 +229,7 @@ for i in loop:
 
     # Weighted sum of the losses
     loss = loss_chamfer * w_chamfer + loss_edge * w_edge + loss_normal * w_normal + loss_laplacian * w_laplacian +  w_laplacian_diff * loss_laplacian_diff
+    # print(f"Angle distance: {angles}")
 
     # Print the losses
     loop.set_description('total_loss = %.6f' % loss)
