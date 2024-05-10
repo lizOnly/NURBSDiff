@@ -48,6 +48,17 @@ else:
     print("WARNING: CPU only, this will be slow!")
 
 # !wget https://dl.fbaipublicfiles.com/pytorch3d/data/dolphin/dolphin.obj
+def angle_distance(x, y, x_normals=None, y_normals=None, norm=2):
+    from pytorch3d.ops.knn import knn_points
+    from pytorch3d.loss.chamfer import _handle_pointcloud_input
+    x_lengths = None
+    y_lengths = None
+
+    x, x_lengths, x_normals = _handle_pointcloud_input(x, x_lengths, x_normals)
+    y, y_lengths, y_normals = _handle_pointcloud_input(y, y_lengths, y_normals)
+    x_nn = knn_points(x, y, lengths1=x_lengths, lengths2=y_lengths, norm=norm, K=1)
+    cham_x = x_nn.dists[..., 0]
+    pass
 
 def plot_pointcloud(mesh, title=""):
     # Sample points uniformly from the surface of the mesh.
@@ -184,6 +195,7 @@ for i in loop:
 
     # We compare the two sets of pointclouds by computing (a) the chamfer loss
     loss_chamfer, _ = chamfer_distance(sample_trg, sample_src)
+    angle_distance(sample_trg, sample_src)
 
 
     # loss_chamfer = point_mesh_face_distance(new_src_mesh, sample_trg)
@@ -245,7 +257,8 @@ final_verts_ico, final_faces_ico = src_mesh_ico.get_mesh_verts_faces(0)
 final_verts = final_verts * scale + center
 
 # Store the predicted mesh using save_obj
-final_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/luigi_factor_def.obj'
+
+final_obj = path_conformal + 'luigi_factor_def.obj'
 icosphere_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/ico_sphere.obj'
 tgt_obj = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps/data/luigi_normalized.obj'
 save_obj(final_obj, final_verts, final_faces)
