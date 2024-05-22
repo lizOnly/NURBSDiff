@@ -301,47 +301,6 @@ def get_normals(weights, inp_ctrl_pts, num_ctrl_pts1, num_ctrl_pts2, layer):
 
     return  surfpts, normal_vectors
 
-
-def get_grid_init_points_patches(ctrlpts, k, s):
-    #get control poitns shape as u and v
-    u = ctrlpts.shape[1]
-    v = ctrlpts.shape[2]
-    # get the list of indices (i,j) for the convlution using k as kernel size and s as stride
-    d_indices = [(i, j) for i in range(0, u - k + 1, k - s) for j in range(0, v - k + 1, k - s)]
-    # for i in range(0, v - k, k - s):
-    #     d_indices.append((i, v - k - 1))
-    # for j in range(0, u - k, k - s):
-    #     d_indices.append((u - k - 1, j))
-    rev_indices = [(i, j) for i in range( u - k , -1, -k + s) for j in range( v - k , -1, -k + s)]
-    indices = d_indices + rev_indices
-    return indices
-
-class Mask:
-    count = 0
-    idx_patch = -1
-    def init(self, masks, n_iter_patch):
-        self.mask = masks
-        self.n_iter_patch = n_iter_patch
-
-    def update(self, indices, k):
-        if self.idx_patch == -1:
-            ii, j = indices[self.idx_patch]
-            self.mask[:, ii:ii + k, j:j + k, :] = 0
-            self.idx_patch += 1
-        if self.idx_patch == len(indices) - 1:
-            self.idx_patch = 0
-
-        self.count += 1
-        if self.count == self.n_iter_patch:
-            self.count = 0
-            ii, j = indices[self.idx_patch]
-            if self.idx_patch != -1:
-                self.mask[:, ii:ii + k, j:j + k, :] = 1
-            self.idx_patch += 1
-            ii, j = indices[self.idx_patch]
-            self.mask[:, ii:ii + k, j:j + k, :] = 0
-        return self.mask
-
 def main():
     gt_path = os.path.dirname(os.path.realpath(__file__))
     gt_path = gt_path.split("/")[0:-1]
@@ -349,37 +308,14 @@ def main():
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
 
-    # gt_path = "/home/lizeth/Documents/Repositories/pygeodesics/data/brain.obj"
-    # cm_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain.txt'
-    # ctr_pts_path = '/home/lizeth/Documents/Repositories/NURBSDiff/data/cm_brain_ctrpts.txt'
-
-    # gt_path = "/mnt/Chest/Repositories/NURBSDiff/data/luigi.obj"
-    # cm_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_0.025_20.txt'
-    # ctr_pts_path = '/mnt/Chest/Repositories/NURBSDiff/data/cm_luigi_uniform_warp_offset_0.003_20.txt'
-
-    # gt_path = gt_path + "/pygeodesics/data/duck_clean.obj"
-    # cm_path =  dir_path + '/data/cm_ducky_0.003_50.txt'
-    # ctr_pts_path =  dir_path + '/data/cm_ducky_0.003_20.txt'
-
-    # gt_path = gt_path + "/pygeodesics/data/sphere.obj"
-    # cm_path = dir_path + '/data/cm_sphere_uniform_pts_0.003_50.txt'
-    # ctr_pts_path = dir_path + '/data/cm_sphere_off_2_0.003_20.txt'
-
-    # gt_path = gt_path + "/pygeodesics/data/sphere_normals.obj"
-    # cm_path = dir_path + '/data/cm_sphere_half_500.003_50.txt'
-    # ctr_pts_path = dir_path + '/data/cm_sphere_half0.003_20.txt'
-    # harmonic_path = '/home/lizeth/Documents/Repositories/spherical_harmonic_maps'
     harmonic_path = '/mnt/Chest/Repositories/spherical_harmonic_maps'
     gt_path = harmonic_path + '/data/luigi.obj'
     cm_path = dir_path + '/data/cm_quadsphere_luigi_50.txt'
-    ctr_pts_path = dir_path + '/data/cm_quadsphere_4_luigi_0.003_50.txt'
+    ctr_pts_path = dir_path + '/data/cm_luigi_part_30_4.txt'
 
-    # ctr_pts = 40
-    # resolution_u = 64
-    # resolution_v = 64
     p = q = 3
 
-    object_name = gt_path.split("/")[-1].split(".")[0]
+    object_name = gt_path.split("/")[-1].split(".")[0] + "_part"
 
     num_epochs = 1
     loss_type = "chamfer"
@@ -401,9 +337,6 @@ def main():
     w_chamfer = 1
     w_normals = 0
 
-    target_from_path = True
-
-
     mod_iter = 1
     cglobal = 1
     average = 0
@@ -414,11 +347,6 @@ def main():
     resolution_u = 21  # samples in the v directions columns per curve points
     resolution_v = 100  # samples in the u direction rows per curve points
 
-    k = 6 # kernel size
-    s = 2 # stride
-    n_iter_patch = 20
-    using_mask = False
-
     # best
     learning_rate = 0.05
 
@@ -428,43 +356,26 @@ def main():
 
     input_point_list, target_list, vertex_positions, resolution_uu = read_irregular_file(cm_path)
 
-    print("#input points " + str(len(input_point_list)))
 
 
-    if target_from_path == True:
-        verts, faces, properties = load_obj(gt_path)
+    verts, faces, properties = load_obj(gt_path)
 
-        target_vert = torch.tensor(verts).float().cuda()
-        if w_normals > 0:
-            gt_normals = properties.normals
-            gt_normals = torch.tensor(gt_normals).float().cuda().unsqueeze(0)
-    else:
-    # create a torch tensor from input_point_list
-        target_vert = torch.tensor(input_point_list).float().cuda()
-        point_cloud = Pointclouds(points=[target_vert])
-        gt_normals = point_cloud.estimate_normals(16)
-
+    target_vert = torch.tensor(verts).float().cuda()
+    if w_normals > 0:
+        gt_normals = properties.normals
+        gt_normals = torch.tensor(gt_normals).float().cuda().unsqueeze(0)
 
 
     sample_size_u = resolution_u
     sample_size_v = resolution_v
 
-    if use_grid == False:
-        cp_input_point_list, cp_target_list, cp_vertex_positions, cp_resolution_u = read_irregular_file(ctr_pts_path)
-        cp_resolution_v = cp_target_list[0].shape[0]
-    else:
-        cp_resolution_u = n_ctrpts
-        cp_resolution_v = n_ctrpts
+    cp_input_point_list, cp_target_list, cp_vertex_positions, cp_resolution_u = read_irregular_file(ctr_pts_path)
+    cp_resolution_v = cp_target_list[0].shape[0]
+
 
     if torch.cuda.is_available():
-        if use_grid:
-            create_grid_points(cp_resolution_u, cp_resolution_v)
-            x , y, z = create_grid_points(cp_resolution_u, cp_resolution_v)
-            inp_ctrl_pts = torch.from_numpy(np.array([x, y, z])).permute(1, 2, 0).unsqueeze(0).contiguous().float().cuda()
-            # if use_mesh_losses:
-            #     new_ctrl_mesh = create_mesh_from_grid(inp_ctrl_pts)
-        else:
-            inp_ctrl_pts = torch.tensor(cp_input_point_list).float().cuda().reshape(1, cp_resolution_u, cp_resolution_v, 3).cuda()
+
+        inp_ctrl_pts = torch.tensor(cp_input_point_list).float().cuda().reshape(1, cp_resolution_u, cp_resolution_v, 3).cuda()
 
     else:
         inp_ctrl_pts = torch.tensor(cp_input_point_list).float().reshape(1, cp_resolution_u, cp_resolution_u, 3)
@@ -476,14 +387,6 @@ def main():
     num_ctrl_pts2 = ctr_pts_v
 
     inp_ctrl_pts.requires_grad = True
-    #create a int tensor idx_patch as int
-    idx_patch = torch.tensor(0).int().cuda()
-
-
-    #used only when masking out the control points
-    indices = get_grid_init_points_patches(inp_ctrl_pts, k, s)
-
-
 
 
     if torch.cuda.is_available():
@@ -503,14 +406,6 @@ def main():
         layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=sample_size_u,
                          out_dim_v=sample_size_v, method='tc')
 
-    if using_mask:
-        mask = torch.ones(inp_ctrl_pts.shape).cuda()
-        mask_obj = Mask()
-        mask_obj.init( mask, n_iter_patch)
-
-        mask_weights = torch.ones(weights.shape).cuda()
-        mask_weights_obj = Mask()
-        mask_weights_obj.init(mask_weights, n_iter_patch)
 
     opt1 = torch.optim.Adam(iter([inp_ctrl_pts, weights]), lr=learning_rate)
     opt2 = torch.optim.Adam(iter([knot_int_u, knot_int_v]), lr=1e-2)
@@ -539,18 +434,6 @@ def main():
                            torch.cat((knot_rep_p_0, knot_int_u, knot_rep_p_1), -1),
                            torch.cat((knot_rep_q_0, knot_int_v, knot_rep_q_1), -1)))[0].detach().cpu().numpy().squeeze()
 
-    with open(
-            f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}_before_trained.OFF',
-            'w') as f:
-        # Loop over the array rows
-        f.write('OFF\n')
-        f.write(str(sample_size_u * sample_size_v) + ' ' + '0 0\n')
-        for i in range(sample_size_u):
-            for j in range(sample_size_v):
-                # print(predicted_target[i, j, :])
-                line = str(beforeTrained[i, j, 0]) + ' ' + str(beforeTrained[i, j, 1]) + ' ' + str(
-                    beforeTrained[i, j, 2]) + '\n'
-                f.write(line)
 
     for i in pbar:
         # torch.cuda.empty_cache()
@@ -607,68 +490,61 @@ def main():
             if loss_type == 'chamfer':
                 # if global loss
 
-                if cglobal == True:
 
-                    # tgt = torch.stack(target_list)
-                    # tgt = tgt.reshape(-1, 3).unsqueeze(0)
-                    tgt = torch.tensor(target_vert).float().cuda().unsqueeze(0)
-                    out = out.reshape(1, sample_size_u * sample_size_v, 3)
-
-
-                    if (i + 1) % mod_iter == 0:
-                        # copy tgt to host
-                        tgt_cpu = target_vert.detach().cpu().numpy().squeeze()
-                        out_cpu = out.detach().cpu().numpy().squeeze()
-
-                        if w_normals > 0:
-                            gt_normals_cpu = gt_normals.detach().cpu().numpy().squeeze()
-                            gt_normals_cpu = np.stack((tgt_cpu, gt_normals_cpu), axis=1)
-
-                        if w_normals > 0:
-                            out_normals_cpu = out_normals.detach().cpu().numpy().squeeze()
-                            out_normals_cpu = np.stack((out_cpu, out_normals_cpu), axis=1)
-
-                        # visualize tgt and out
-                        fig = plt.figure()
-                        ax = fig.add_subplot(projection='3d')
-                        # a = 102
-                        # b = 153
-                        a = 0
-                        b = -1
-                        ax.scatter(tgt_cpu[a:b, 0], tgt_cpu[a:b, 1], tgt_cpu[a:b, 2], c='r', marker='o')
-                        ax.scatter(out_cpu[a:b, 0], out_cpu[a:b, 1], out_cpu[a:b, 2], c='b', marker='o')
-
-                        if show_normals == True and w_normals > 0:
-                            ax.quiver(gt_normals_cpu[:, 0, 0], gt_normals_cpu[:, 0, 1], gt_normals_cpu[:, 0, 2],
-                                      gt_normals_cpu[:, 1, 0], gt_normals_cpu[:, 1, 1], gt_normals_cpu[:, 1, 2],
-                                      color='green', length=0.15)
-                            if w_normals > 0:
-                                ax.quiver(out_normals_cpu[:, 0, 0], out_normals_cpu[:, 0, 1], out_normals_cpu[:, 0, 2],
-                                          out_normals_cpu[:, 1, 0], out_normals_cpu[:, 1, 1], out_normals_cpu[:, 1, 2],
-                                          color='black', length=0.15)
+                # tgt = torch.stack(target_list)
+                # tgt = tgt.reshape(-1, 3).unsqueeze(0)
+                tgt = torch.tensor(target_vert).float().cuda().unsqueeze(0)
+                out = out.reshape(1, sample_size_u * sample_size_v, 3)
 
 
-                        plt.show()
+                if (i + 1) % mod_iter == 0:
+                    # copy tgt to host
+                    tgt_cpu = target_vert.detach().cpu().numpy().squeeze()
+                    out_cpu = out.detach().cpu().numpy().squeeze()
+
                     if w_normals > 0:
-                        loss_chamfer, loss_normals = chamfer_distance(out, tgt, x_normals=out_normals, y_normals=gt_normals)
-                        loss = w_chamfer * loss_chamfer + w_lap * loss_laplacian + w_normals * loss_normals
+                        gt_normals_cpu = gt_normals.detach().cpu().numpy().squeeze()
+                        gt_normals_cpu = np.stack((tgt_cpu, gt_normals_cpu), axis=1)
 
-                        # Save the losses for plotting
-                        chamfer_losses.append(w_chamfer * float(loss_chamfer.detach().cpu()))
-                        normal_losses.append(w_normals * float(loss_normals.detach().cpu()))
-                        laplacian_losses.append(w_lap * float(loss_laplacian.detach().cpu()))
+                    if w_normals > 0:
+                        out_normals_cpu = out_normals.detach().cpu().numpy().squeeze()
+                        out_normals_cpu = np.stack((out_cpu, out_normals_cpu), axis=1)
 
-                    else:
-                        loss_chamfer, _ = chamfer_distance(out, tgt)
-                        loss = w_chamfer * loss_chamfer + w_lap * loss_laplacian
+                    # visualize tgt and out
+                    fig = plt.figure()
+                    ax = fig.add_subplot(projection='3d')
+                    # a = 102
+                    # b = 153
+                    a = 0
+                    b = -1
+                    ax.scatter(tgt_cpu[a:b, 0], tgt_cpu[a:b, 1], tgt_cpu[a:b, 2], c='r', marker='o')
+                    ax.scatter(out_cpu[a:b, 0], out_cpu[a:b, 1], out_cpu[a:b, 2], c='b', marker='o')
 
-                # decrease w_lap according to the epoch
-                # if i < 600:
-                #     w_lap = 0.1
-                # else:
-                #     w_lap = 0.1 * (1 - (i - 600)/600)
+                    if show_normals == True and w_normals > 0:
+                        ax.quiver(gt_normals_cpu[:, 0, 0], gt_normals_cpu[:, 0, 1], gt_normals_cpu[:, 0, 2],
+                                  gt_normals_cpu[:, 1, 0], gt_normals_cpu[:, 1, 1], gt_normals_cpu[:, 1, 2],
+                                  color='green', length=0.15)
+                        if w_normals > 0:
+                            ax.quiver(out_normals_cpu[:, 0, 0], out_normals_cpu[:, 0, 1], out_normals_cpu[:, 0, 2],
+                                      out_normals_cpu[:, 1, 0], out_normals_cpu[:, 1, 1], out_normals_cpu[:, 1, 2],
+                                      color='black', length=0.15)
+
+
+                    plt.show()
+                if w_normals > 0:
+                    loss_chamfer, loss_normals = chamfer_distance(out, tgt, x_normals=out_normals, y_normals=gt_normals)
+                    loss = w_chamfer * loss_chamfer + w_lap * loss_laplacian + w_normals * loss_normals
+
+                    # Save the losses for plotting
+                    chamfer_losses.append(w_chamfer * float(loss_chamfer.detach().cpu()))
+                    normal_losses.append(w_normals * float(loss_normals.detach().cpu()))
+                    laplacian_losses.append(w_lap * float(loss_laplacian.detach().cpu()))
+
                 else:
-                    loss = (1 - w_lap) * chamfer_distance_each_row(out, target_list) + w_lap * lap
+                    loss_chamfer, _ = chamfer_distance(out, tgt)
+                    loss = w_chamfer * loss_chamfer + w_lap * loss_laplacian
+
+
 
                 log_value('chamfer_distance', loss, i)
                 # log_value('laplacian_loss', lap * 10, i)
@@ -676,36 +552,13 @@ def main():
 
             loss.sum().backward(retain_graph=True)
 
-            grads_ctrpts = inp_ctrl_pts.grad
-            grads_weights = weights.grad
-            grads_knot_u = knot_int_u.grad
-            grads_knot_v = knot_int_v.grad
-
-            # # avoiding the sphere to open up
-            # close_sphere == True:
-            # inp_ctrl_pts.grad[:, 0, :, :] = 0
-            # inp_ctrl_pts.grad[:, -1, :, :] = 0
-            # inp_ctrl_pts.grad[:, :, 0, :] = inp_ctrl_pts.grad[:, :, -1, :] = 0
-
             # disabling knots
             knot_int_u.grad = torch.zeros(knot_int_u.grad.shape).cuda()
             knot_int_v.grad = torch.zeros(knot_int_v.grad.shape).cuda()
 
-            if using_mask:
-                masked = mask_obj.update(indices, k)
-                masked_weights = mask_weights_obj.update(indices, k)
-                inp_ctrl_pts.grad = torch.masked_fill(inp_ctrl_pts.grad, masked.bool(), 0)
-                weights.grad = torch.masked_fill(weights.grad, masked_weights.bool(), 0)
 
 
             return loss
-
-        # if i % 100 < 30:
-        #     loss = opt1.step(closure)
-        #     lr_schedule1.step(loss)
-        # else:
-        #     loss = opt2.step(closure)
-        #     lr_schedule2.step(loss)
 
         loss = opt1.step(closure)
         lr_schedule1.step(loss)
@@ -763,51 +616,6 @@ def main():
     predictedknotv = knot_int_v.detach().cpu().numpy().squeeze().tolist()
     predictedknotv = [0., 0., 0., 0., 0.] + predictedknotv + [1., 1., 1., 1.]
 
-    # Open the file in write mode
-    with open('generated/u_test.ctrlpts', 'w') as f:
-        # Loop over the array rows
-        x = predictedctrlpts
-        x = x.reshape(ctr_pts_u, ctr_pts_v, 3)
-
-        for i in range(ctr_pts_u):
-            for j in range(ctr_pts_v):
-                # print(predicted_target[i, j, :])
-                line = str(x[i, j, 0]) + ' ' + str(x[i, j, 1]) + ' ' + str(x[i, j, 2])
-                f.write(line)
-                # if (j == ctr_pts - 1):
-                f.write('\n')
-                # else:
-                #     f.write(';')
-
-    with open('generated/u_test.weights', 'w') as f:
-        # Loop over the array rows
-        x = predictedweights
-
-        for row in x:
-            # Flatten the row to a 1D array
-            row_flat = row.reshape(-1)
-            # Write the row values to the file as a string separated by spaces
-            f.write(','.join([str(x) for x in row_flat]) + '\n')
-
-    with open('generated/u_test.knotu', 'w') as f:
-        # Loop over the array rows
-        x = predictedknotu
-
-        for row in x:
-            # Flatten the row to a 1D array
-
-            # Write the row values to the file as a string separated by spaces
-            f.write(','.join([str(row)]) + '\n')
-
-    with open('generated/u_test.knotv', 'w') as f:
-        # Loop over the array rows
-        x = predictedknotv
-
-        for row in x:
-            # Flatten the row to a 1D array
-
-            # Write the row values to the file as a string separated by spaces
-            f.write(','.join([str(row)]) + '\n')
 
     if torch.cuda.is_available():
         layer = SurfEval(num_ctrl_pts1, num_ctrl_pts2, dimension=3, p=p, q=q, out_dim_u=out_dim_u, out_dim_v=out_dim_v,
