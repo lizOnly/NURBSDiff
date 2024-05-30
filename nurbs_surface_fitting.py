@@ -372,7 +372,7 @@ def main():
     harmonic_path = '/mnt/Chest/Repositories/spherical_harmonic_maps'
     gt_path = harmonic_path + '/data/luigi.obj'
     cm_path = dir_path + '/data/cm_quadsphere_luigi_50.txt'
-    ctr_pts_path = dir_path + '/data/cm_quadsphere_4_luigi_0.003_50.txt'
+    ctr_pts_path = dir_path + '/data/cm_luigi_part_30_4.txt'
 
     # ctr_pts = 40
     # resolution_u = 64
@@ -380,6 +380,7 @@ def main():
     p = q = 3
 
     object_name = gt_path.split("/")[-1].split(".")[0]
+    part_name = ctr_pts_path.split("/")[-1].split(".")[0]
 
     num_epochs = 1
     loss_type = "chamfer"
@@ -842,7 +843,7 @@ def main():
                 line = str(out2[i, j, 0]) + ' ' + str(out2[i, j, 1]) + ' ' + str(out2[i, j, 2]) + '\n'
                 f.write(line)
 
-    with open(f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}.OFF', 'w') as f:
+    with open(f'generated/{object_name}/{part_name}_ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}.OFF', 'w') as f:
         # Loop over the array rows
         f.write('OFF\n')
         f.write(str(num_ctrl_pts1 * num_ctrl_pts2) + ' ' + '0 0\n')
@@ -852,7 +853,7 @@ def main():
                     predictedctrlpts[i, j, 2]) + '\n'
                 f.write(line)
 
-    with open(f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}', 'w') as f:
+    with open(f'generated/{object_name}/{part_name}_ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}', 'w') as f:
         # Loop over the array rows
         for i in range(num_ctrl_pts1):
             for j in range(num_ctrl_pts2):
@@ -864,7 +865,7 @@ def main():
     np.save(f'generated/{object_name}/U_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}', U)
     np.save(f'generated/{object_name}/V_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}', V)
 
-    filename_ctrpts = f'generated/{object_name}/ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}'
+    filename_ctrpts = f'generated/{object_name}/{part_name}_ctrpts_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}'
 
     U = np.load(f'generated/{object_name}/U_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}.npy')
     V = np.load(f'generated/{object_name}/V_{ctr_pts_u}_dim_{out_dim_u}x{out_dim_v}_{resolution_v}.npy')
@@ -875,7 +876,7 @@ def main():
     # surfpts, tangent_vectors, normal_vectors = reconstructed_mesh(object_name, filename_ctrpts, num_ctrl_pts1, num_ctrl_pts2, U, V)
     surfpts, tangent_vectors, normal_vectors = reconstructed_mesh(object_name, filename_ctrpts, num_ctrl_pts1,
                                                                   num_ctrl_pts2, U, V)
-    plot_tangent_normals(surfpts, tangent_vectors, normal_vectors)
+    # plot_tangent_normals(surfpts, tangent_vectors, normal_vectors)
 
     pass
 def show_losses(chamfer_losses, normal_losses, laplacian_losses):

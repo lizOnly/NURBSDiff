@@ -311,7 +311,7 @@ def main():
     harmonic_path = '/mnt/Chest/Repositories/spherical_harmonic_maps'
     gt_path = harmonic_path + '/data/luigi.obj'
     cm_path = dir_path + '/data/cm_quadsphere_luigi_50.txt'
-    ctr_pts_path = dir_path + '/data/cm_luigi_part_30_4.txt'
+    ctr_pts_path = dir_path + '/data/cm_luigi_global_30_30.txt'
 
     p = q = 3
 
